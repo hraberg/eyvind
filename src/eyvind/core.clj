@@ -59,7 +59,14 @@
   (when-let [{:keys [value-offset value-size]} (get keydir k)]
     (let [bytes (byte-array value-size)]
       (.getBytes log (long value-offset) bytes)
-      (read-string (String. bytes "UTF-8")))))
+      (let [value (read-string (String. bytes "UTF-8"))]
+        (when-not (= ::tombstone value)
+          value)))))
+
+(defn remove-entry [{:keys [^eyvind.MMapper log keydir] :as bc} k]
+  (-> bc
+      (put-entry k ::tombstone)
+      (update-in [:keydir] dissoc k)))
 
 (defn read-entry [{:keys [^eyvind.MMapper log]} offset]
   (let [ts (.getLong log (+ 8 offset))
@@ -70,6 +77,7 @@
     (.getBytes log (+ 8 offset) entry-bytes)
     {:ts ts
      :key (String. entry-bytes 20 key-size "UTF-8")
+     :tombstone? (= ::tombstone (read-string (String. entry-bytes (+ 20 key-size) value-size "UTF-8")))
      :bytes entry-bytes
      :value-size value-size
      :value-offset (+ offset 28 key-size)}))
@@ -79,8 +87,10 @@
     (let [crc (.getLong log offset)]
       (if (zero? crc)
         (assoc bc :keydir keydir :offset offset)
-        (let [{:keys [key bytes] :as entry} (read-entry bc offset)]
+        (let [{:keys [key bytes tombstone?] :as entry} (read-entry bc offset)]
           (when-not (= crc (crc32 bytes))
             (throw (IllegalStateException. (str "CRC check failed at offset: " offset))))
           (recur (+ offset 8 (count bytes))
-                 (assoc keydir key (dissoc entry :bytes :key))))))))
+                 (if tombstone?
+                   (dissoc keydir key)
+                   (assoc keydir key (dissoc entry :bytes :key :tombstone?)))))))))
