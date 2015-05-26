@@ -11,11 +11,10 @@
   ([file {:keys [size offset keydir] :or {size (* 1024 8) offset 0 keydir {}}}]
    {:log (eyvind.MMapper. file size) :offset 0 :size size :keydir keydir :active-file file}))
 
-(defn keydir-entry [ts k v]
-  (let [key-bytes (.getBytes (str k))
+(defn keydir-entry [ts k ^bytes v]
+  (let [key-bytes (.getBytes (str k) "UTF-8")
         key-size (count key-bytes)
-        value-bytes (.getBytes (pr-str v))
-        value-size (count value-bytes)]
+        value-size (count v)]
     {:ts ts
      :bytes (-> (ByteBuffer/allocate (+ 20 key-size value-size))
                 (.order (ByteOrder/nativeOrder))
@@ -23,7 +22,7 @@
                 (.putInt key-size)
                 (.putLong value-size)
                 (.put key-bytes)
-                (.put value-bytes)
+                (.put v)
                 .array)
      :value-size value-size
      :value-offset (+ 20 key-size)}))
@@ -55,17 +54,18 @@
          (update-in [:keydir] assoc k keydir-entry)
          (assoc :size new-size)))))
 
+(defn tombstone? [{:keys [value-size]}]
+  (zero? value-size))
+
 (defn get-entry [{:keys [^eyvind.MMapper log keydir] :as bc} k]
-  (when-let [{:keys [value-offset value-size]} (get keydir k)]
-    (let [bytes (byte-array value-size)]
-      (.getBytes log (long value-offset) bytes)
-      (let [value (read-string (String. bytes "UTF-8"))]
-        (when-not (= ::tombstone value)
-          value)))))
+  (when-let [{:keys [value-offset value-size] :as entry} (get keydir k)]
+    (when-not (tombstone? entry)
+      (->> (byte-array value-size)
+           (.getBytes log (long value-offset))))))
 
 (defn remove-entry [{:keys [^eyvind.MMapper log keydir] :as bc} k]
   (-> bc
-      (put-entry k ::tombstone)
+      (put-entry k (byte-array 0))
       (update-in [:keydir] dissoc k)))
 
 (defn read-entry [{:keys [^eyvind.MMapper log]} offset]
@@ -73,11 +73,9 @@
         key-size (.getInt log (+ 16 offset))
         value-size (.getLong log (+ 20 offset))
         entry-size (+ 20 key-size value-size)
-        entry-bytes (byte-array entry-size)]
-    (.getBytes log (+ 8 offset) entry-bytes)
-    {:ts ts
-     :key (String. entry-bytes 20 key-size "UTF-8")
-     :tombstone? (= ::tombstone (read-string (String. entry-bytes (+ 20 key-size) value-size "UTF-8")))
+        entry-bytes (->> (byte-array entry-size) (.getBytes log (+ 8 offset)))]
+    {:key (String. entry-bytes 20 key-size "UTF-8")
+     :ts ts
      :bytes entry-bytes
      :value-size value-size
      :value-offset (+ offset 28 key-size)}))
@@ -87,10 +85,10 @@
     (let [crc (.getLong log offset)]
       (if (zero? crc)
         (assoc bc :keydir keydir :offset offset)
-        (let [{:keys [key bytes tombstone?] :as entry} (read-entry bc offset)]
+        (let [{:keys [key bytes] :as entry} (read-entry bc offset)]
           (when-not (= crc (crc32 bytes))
             (throw (IllegalStateException. (str "CRC check failed at offset: " offset))))
           (recur (+ offset 8 (count bytes))
-                 (if tombstone?
+                 (if (tombstone? entry)
                    (dissoc keydir key)
-                   (assoc keydir key (dissoc entry :bytes :key :tombstone?)))))))))
+                   (assoc keydir key (dissoc entry :bytes :key)))))))))
