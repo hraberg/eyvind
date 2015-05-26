@@ -17,16 +17,16 @@
         value-bytes (.getBytes (pr-str v))
         value-size (count value-bytes)]
     {:ts ts
-     :bytes (-> (ByteBuffer/allocate (+ 24 key-size value-size))
+     :bytes (-> (ByteBuffer/allocate (+ 20 key-size value-size))
                 (.order (ByteOrder/nativeOrder))
                 (.putLong ts)
-                (.putLong key-size)
+                (.putInt key-size)
                 (.putLong value-size)
                 (.put key-bytes)
                 (.put value-bytes)
                 .array)
      :value-size value-size
-     :value-offset (+ 24 key-size)}))
+     :value-offset (+ 20 key-size)}))
 
 (defn crc32 [^bytes bytes]
   (.getValue (doto (CRC32.)
@@ -63,16 +63,16 @@
 
 (defn read-entry [{:keys [^eyvind.MMapper log]} offset]
   (let [ts (.getLong log (+ 8 offset))
-        key-size (.getLong log (+ 16 offset))
-        value-size (.getLong log (+ 24 offset))
-        entry-size (+ 24 key-size value-size)
+        key-size (.getInt log (+ 16 offset))
+        value-size (.getLong log (+ 20 offset))
+        entry-size (+ 20 key-size value-size)
         entry-bytes (byte-array entry-size)]
     (.getBytes log (+ 8 offset) entry-bytes)
     {:ts ts
-     :key (String. entry-bytes 24 key-size "UTF-8")
+     :key (String. entry-bytes 20 key-size "UTF-8")
      :bytes entry-bytes
      :value-size value-size
-     :value-offset (+ offset 32 key-size)}))
+     :value-offset (+ offset 28 key-size)}))
 
 (defn scan-log [{:keys [^eyvind.MMapper log keydir] :as bc}]
   (loop [offset 0 keydir keydir]
