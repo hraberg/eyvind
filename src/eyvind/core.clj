@@ -25,8 +25,8 @@
                 (.put key-bytes)
                 (.put value-bytes)
                 .array)
-     :value-offset (+ 24 key-size)
-     :value-size value-size}))
+     :value-size value-size
+     :value-offset (+ 24 key-size)}))
 
 (defn crc32 [^bytes bytes]
   (.getValue (doto (CRC32.)
@@ -61,25 +61,26 @@
       (.getBytes log (long value-offset) bytes)
       (read-string (String. bytes "UTF-8")))))
 
-(defn scan-log [{:keys [^eyvind.MMapper log size keydir active-file] :as bc}]
+(defn read-entry [{:keys [^eyvind.MMapper log]} offset]
+  (let [ts (.getLong log (+ 8 offset))
+        key-size (.getLong log (+ 16 offset))
+        value-size (.getLong log (+ 24 offset))
+        entry-size (+ 24 key-size value-size)
+        entry-bytes (byte-array entry-size)]
+    (.getBytes log (+ 8 offset) entry-bytes)
+    {:ts ts
+     :key (String. entry-bytes 24 key-size "UTF-8")
+     :bytes entry-bytes
+     :value-size value-size
+     :value-offset (+ offset 32 key-size)}))
+
+(defn scan-log [{:keys [^eyvind.MMapper log keydir] :as bc}]
   (loop [offset 0 keydir keydir]
     (let [crc (.getLong log offset)]
       (if (zero? crc)
         (assoc bc :keydir keydir :offset offset)
-        (let [ts (.getLong log (+ 8 offset))
-              key-size (.getLong log (+ 16 offset))
-              value-size (.getLong log (+ 24 offset))
-              entry-size (+ 24 key-size value-size)
-              entry-bytes (byte-array entry-size)
-              value-offset (+ offset 32 key-size)]
-          (.getBytes log (+ 8 offset) entry-bytes)
-          (when-not (= crc (crc32 entry-bytes))
+        (let [{:keys [key bytes] :as entry} (read-entry bc offset)]
+          (when-not (= crc (crc32 bytes))
             (throw (IllegalStateException. (str "CRC check failed at offset: " offset))))
-          (let [key-bytes (byte-array key-size)]
-            (.getBytes log 32 key-bytes)
-            (recur (+ offset 8 entry-size)
-                   (assoc keydir
-                          (String. key-bytes "UTF-8") {:value-offset value-offset
-                                                       :value-size value-size
-                                                       :ts ts
-                                                       :file active-file}))))))))
+          (recur (+ offset 8 (count bytes))
+                 (assoc keydir key (dissoc entry :bytes :key))))))))
