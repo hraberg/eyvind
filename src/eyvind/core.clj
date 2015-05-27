@@ -11,8 +11,8 @@
 (defn open-log
   ([file]
    (open-log file {}))
-  ([file {:keys [size offset keydir] :or {size (* 1024 8) offset 0 keydir {}}}]
-   {:log (mmap/mmap file size) :offset 0 :keydir keydir :file file}))
+  ([file {:keys [size offset keydir sync?] :or {size (* 1024 8) offset 0 keydir {} sync? false}}]
+   {:log (mmap/mmap file size) :offset 0 :keydir keydir :file file :sync? sync?}))
 
 (defn keydir-entry [ts k ^bytes v]
   (let [key-bytes (.getBytes (str k) "UTF-8")
@@ -37,7 +37,7 @@
 (defn put-entry
   ([bc k v]
    (put-entry bc (System/currentTimeMillis) k v))
-  ([{:keys [log offset keydir file] :as bc} ts k v]
+  ([{:keys [log offset keydir file sync?] :as bc} ts k v]
    (let [{:keys [bytes] :as entry} (keydir-entry ts k v)
          entry-size (+ 8 (count bytes))
          entry-start (+ 8 offset)
@@ -49,6 +49,8 @@
                                 (> (+ entry-size offset) size) (update-in [:log] mmap/remap (* 2 size)))]
      (mmap/put-long log offset (crc32 bytes))
      (mmap/put-bytes log entry-start bytes)
+     (when sync?
+       (mmap/fsync log))
      (-> bc
          (update-in [:offset] + entry-size)
          (update-in [:keydir] assoc k keydir-entry)))))

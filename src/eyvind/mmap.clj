@@ -20,13 +20,20 @@
   (bit-and (+ x 0xfff) (bit-not 0xfff)))
 
 (defn mmap [file size]
-  (let [size (round-to-4096 size)]
-    (with-open [backing-file (doto (RandomAccessFile. file "rw")
-                               (.setLength size))
-                channel (.getChannel backing-file)]
-      {:file file :size size :address (.invoke mmap-c channel (object-array [(int 1) 0 size]))})))
+  (let [size (round-to-4096 size)
+        channel (.getChannel (doto (RandomAccessFile. file "rw")
+                               (.setLength size)))]
+    {:file file
+     :size size
+     :address (.invoke mmap-c channel (object-array [(int 1) 0 size]))
+     :channel channel}))
 
-(defn unmap [{:keys [size address channel]}]
+(defn fsync [{:keys [channel]}]
+  (.force channel true))
+
+(defn unmap [{:keys [size address channel] :as mapped-file}]
+  (fsync mapped-file)
+  (.close channel)
   (.invoke unmap-c nil (object-array [address size])))
 
 (defn remap [{:keys [file] :as mapped-file} new-size]
