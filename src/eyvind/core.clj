@@ -12,12 +12,17 @@
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
 
+(defn lru [^long size]
+  (proxy [LinkedHashMap] [size 0.75 true]
+    (removeEldestEntry [_]
+      (> (count this) size))))
+
 (defn open-log
   ([file]
-   (open-log file (* 8 1024) {}))
-  ([file length opts]
+   (open-log file (* 8 1024) 1024 {}))
+  ([file length cache-size opts]
    (-> (merge {:offset 0 :keydir {} :growth-factor 2} opts)
-       (assoc :log (mmap/mmap file length)))))
+       (assoc :log (mmap/mmap file length) :cache (lru cache-size)))))
 
 (defrecord KeydirEntry [^long ts ^long value-size ^long value-offset])
 
@@ -56,20 +61,25 @@
      (mmap/put-bytes log entry-start bytes)
      (-> bc
          (update-in [:offset] + entry-size)
-         (update-in [:keydir] assoc k keydir-entry)))))
+         (update-in [:keydir] assoc k keydir-entry)
+         (update-in [:cache] #(doto ^LinkedHashMap % (.put k v)))))))
 
 (defn tombstone? [^KeydirEntry entry]
   (zero? (.value-size entry)))
 
-(defn get-entry [{:keys [log keydir] :as bc} k]
-  (when-let [^KeydirEntry entry (get keydir k)]
-    (when-not (tombstone? entry)
-      (mmap/get-bytes log (.value-offset entry) (byte-array (.value-size entry))))))
+(defn get-entry [{:keys [log keydir ^LinkedHashMap cache] :as bc} k]
+  (if (contains? cache k)
+    (get cache k)
+    (when-let [^KeydirEntry entry (get keydir k)]
+      (when-not (tombstone? entry)
+        (doto (mmap/get-bytes log (.value-offset entry) (byte-array (.value-size entry)))
+          (->> (.put cache k)))))))
 
 (defn remove-entry [bc k]
   (-> bc
       (put-entry k (byte-array 0))
-      (update-in [:keydir] dissoc k)))
+      (update-in [:keydir] dissoc k)
+      (update-in [:cache] #(doto ^LinkedHashMap % (.remove k)))))
 
 (defn read-entry [{:keys [log]} ^long offset]
   (let [ts (mmap/get-long log (+ 8 offset))
@@ -125,11 +135,6 @@
                      (assoc keydir (String. key-bytes "UTF-8") (->KeydirEntry ts value-size value-offset))))
             (assoc bc :keydir keydir :offset offset))))
       bc)))
-
-(defn lru [^long size]
-  (proxy [LinkedHashMap] [size 0.75 true]
-    (removeEldestEntry [_]
-      (> (count this) size))))
 
 (defn sha1 [x]
   (->> (doto (MessageDigest/getInstance "SHA-1")
