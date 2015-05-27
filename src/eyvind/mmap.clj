@@ -24,26 +24,26 @@
 (defn round-to-4096 [^long x]
   (bit-and (+ x 0xfff) (bit-not 0xfff)))
 
-(defrecord MappedFile [^String file ^long size ^long address ^FileChannel channel])
+(defrecord MappedFile [^String file ^long length ^long address ^FileChannel channel])
 
-(defn mmap [file ^long size]
-  (let [size (round-to-4096 (max size (.length (io/file file))))
+(defn mmap [file ^long length]
+  (let [length (round-to-4096 (max length (.length (io/file file))))
         channel (.getChannel (doto (RandomAccessFile. (str file) "rw")
-                               (.setLength size)))
-        address (.invoke mmap-c channel (object-array [(int 1) 0 size]))]
-    (->MappedFile file size address channel)))
+                               (.setLength length)))
+        address (.invoke mmap-c channel (object-array [(int 1) 0 length]))]
+    (->MappedFile file length address channel)))
 
 (defn fsync [{:keys [^FileChannel channel]}]
   (.force channel true))
 
-(defn unmap [{:keys [size address ^FileChannel channel] :as mapped-file}]
+(defn unmap [{:keys [length address ^FileChannel channel] :as mapped-file}]
   (fsync mapped-file)
   (.close channel)
-  (.invoke unmap-c nil (object-array [address size])))
+  (.invoke unmap-c nil (object-array [address length])))
 
-(defn remap [{:keys [file] :as mapped-file} ^long new-size]
+(defn remap [{:keys [file] :as mapped-file} ^long new-length]
   (unmap mapped-file)
-  (mmap file new-size))
+  (mmap file new-length))
 
 (defn get-int ^long [^MappedFile mapped-file ^long pos]
   (.getInt unsafe (+ pos (.address mapped-file))))

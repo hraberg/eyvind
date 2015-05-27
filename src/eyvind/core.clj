@@ -12,24 +12,24 @@
 (defn open-log
   ([file]
    (open-log file {}))
-  ([file {:keys [size offset keydir sync?] :or {size (* 1024 8) offset 0 keydir {} sync? false}}]
-   {:log (mmap/mmap file size) :offset 0 :keydir keydir :file file :sync? sync?}))
+  ([file {:keys [length offset keydir sync?] :or {length (* 1024 8) offset 0 keydir {} sync? false}}]
+   {:log (mmap/mmap file length) :offset 0 :keydir keydir :file file :sync? sync?}))
+
+(defrecord KeydirEntry [^long ts ^long value-size ^long value-offset])
 
 (defn keydir-entry [ts k ^bytes v]
   (let [key-bytes (.getBytes (str k) "UTF-8")
         key-size (count key-bytes)
         value-size (count v)]
-    {:ts ts
-     :bytes (-> (ByteBuffer/allocate (+ 20 key-size value-size))
-                (.order (ByteOrder/nativeOrder))
-                (.putLong ts)
-                (.putInt key-size)
-                (.putLong value-size)
-                (.put key-bytes)
-                (.put v)
-                .array)
-     :value-size value-size
-     :value-offset (+ 20 key-size)}))
+    (-> (->KeydirEntry ts value-size (+ 20 key-size))
+        (assoc :bytes (-> (ByteBuffer/allocate (+ 20 key-size value-size))
+                          (.order (ByteOrder/nativeOrder))
+                          (.putLong ts)
+                          (.putInt key-size)
+                          (.putLong value-size)
+                          (.put key-bytes)
+                          (.put v)
+                          .array)))))
 
 (defn crc32 [^bytes bytes]
   (.getValue (doto (CRC32.)
@@ -45,9 +45,9 @@
          keydir-entry (-> entry
                           (dissoc :bytes)
                           (update-in [:value-offset] + entry-start))
-         size (.size log)
+         length (.length log)
          {:keys [log] :as bc} (cond-> bc
-                                (> (+ entry-size offset) size) (update-in [:log] mmap/remap (* 2 size)))]
+                                (> (+ entry-size offset) length) (update-in [:log] mmap/remap (* 2 length)))]
      (mmap/put-long log offset (crc32 bytes))
      (mmap/put-bytes log entry-start bytes)
      (when sync?
@@ -56,13 +56,13 @@
          (update-in [:offset] + entry-size)
          (update-in [:keydir] assoc k keydir-entry)))))
 
-(defn tombstone? [{:keys [^long value-size]}]
-  (zero? value-size))
+(defn tombstone? [^KeydirEntry entry]
+  (zero? (.value-size entry)))
 
 (defn get-entry [{:keys [log keydir] :as bc} k]
-  (when-let [{:keys [value-offset value-size] :as entry} (get keydir k)]
+  (when-let [^KeydirEntry entry (get keydir k)]
     (when-not (tombstone? entry)
-      (mmap/get-bytes log value-offset (byte-array value-size)))))
+      (mmap/get-bytes log (.value-offset entry) (byte-array (.value-size entry))))))
 
 (defn remove-entry [bc k]
   (-> bc
@@ -75,11 +75,9 @@
         value-size (mmap/get-long log (+ 20 offset))
         entry-size (+ 20 key-size value-size)
         entry-bytes (mmap/get-bytes log (+ 8 offset) (byte-array entry-size))]
-    {:key (String. ^bytes entry-bytes 20 key-size "UTF-8")
-     :ts ts
-     :bytes entry-bytes
-     :value-size value-size
-     :value-offset (+ offset 28 key-size)}))
+    (-> (->KeydirEntry ts value-size (+ offset 28 key-size))
+        (assoc :key (String. ^bytes entry-bytes 20 key-size "UTF-8")
+               :bytes entry-bytes))))
 
 (defn scan-log [{:keys [log keydir] :as bc}]
   (loop [offset 0 keydir keydir]
