@@ -97,7 +97,7 @@
   (str (:file log) ".hint"))
 
 (defn write-hint-file [{:keys [keydir] :as bc}]
-  (with-open [out (DataOutputStream. (FileOutputStream. (hint-file bc)))]
+  (with-open [out (DataOutputStream. (io/output-stream (hint-file bc)))]
     (doseq [[^String k ^KeydirEntry v] keydir]
       (let [key-bytes (.getBytes k "UTF-8")
             key-size (count key-bytes)]
@@ -111,7 +111,7 @@
 (defn read-hint-file [{:keys [log keydir] :as bc}]
   (let [hints (io/file (hint-file bc))]
     (if (.exists hints)
-      (with-open [in (DataInputStream. (FileInputStream. hints))]
+      (with-open [in (DataInputStream. (io/input-stream hints))]
         (loop [offset 0 keydir keydir]
           (if (pos? (.available in))
             (let [ts (.readLong in)
