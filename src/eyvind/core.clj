@@ -101,4 +101,4 @@
        (BigInteger. 1)))
 
 (defn biginteger->hex [^BigInteger x]
-  (.toString x 16))
+  (format "%040x" x))
