@@ -24,6 +24,8 @@
 (defn round-to-4096 [^long x]
   (bit-and (+ x 0xfff) (bit-not 0xfff)))
 
+(declare unmap)
+
 (defrecord MappedFile [^String file ^long length ^long address]
   Closeable
   (close [this]
