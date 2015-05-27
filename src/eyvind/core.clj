@@ -1,5 +1,6 @@
 (ns eyvind.core
   (:import
+   [java.net InetAddress NetworkInterface]
    [java.nio ByteBuffer ByteOrder]
    [java.security MessageDigest]
    [java.util.zip CRC32]))
@@ -102,3 +103,11 @@
 
 (defn biginteger->hex [^BigInteger x]
   (format "%040x" x))
+
+(defn ip []
+  (->> (NetworkInterface/getNetworkInterfaces)
+       enumeration-seq
+       (mapcat (comp enumeration-seq #(.getInetAddresses ^NetworkInterface %)))
+       (map #(.getHostAddress ^InetAddress %))
+       (remove #(re-find #"^127\." %))
+       first))
