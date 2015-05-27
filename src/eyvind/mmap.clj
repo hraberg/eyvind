@@ -8,12 +8,15 @@
 
 ;; Based on http://nyeggen.com/post/2014-05-18-memory-mapping-%3E2gb-of-data-in-java/
 
-(def unsafe (.get (doto (.getDeclaredField Unsafe "theUnsafe")
-                    (.setAccessible true)) nil))
-(def mmap-c (doto (.getDeclaredMethod FileChannelImpl "map0" (into-array [Integer/TYPE Long/TYPE Long/TYPE]))
-              (.setAccessible true)))
-(def unmap-c (doto (.getDeclaredMethod FileChannelImpl "unmap0" (into-array [Long/TYPE Long/TYPE]))
-               (.setAccessible true)))
+(set! *warn-on-reflection* true)
+
+(def ^Unsafe unsafe (let [field (doto (.getDeclaredField Unsafe "theUnsafe")
+                                  (.setAccessible true))]
+                      (.get field nil)))
+(def ^Method mmap-c (doto (.getDeclaredMethod FileChannelImpl "map0" (into-array [Integer/TYPE Long/TYPE Long/TYPE]))
+                      (.setAccessible true)))
+(def ^Method unmap-c (doto (.getDeclaredMethod FileChannelImpl "unmap0" (into-array [Long/TYPE Long/TYPE]))
+                       (.setAccessible true)))
 (def BYTE_ARRAY_OFFSET (.arrayBaseOffset unsafe (class (byte-array 0))))
 
 (defn round-to-4096 [x]
@@ -21,17 +24,17 @@
 
 (defn mmap [file size]
   (let [size (round-to-4096 size)
-        channel (.getChannel (doto (RandomAccessFile. file "rw")
+        channel (.getChannel (doto (RandomAccessFile. (str file) "rw")
                                (.setLength size)))]
     {:file file
      :size size
      :address (.invoke mmap-c channel (object-array [(int 1) 0 size]))
      :channel channel}))
 
-(defn fsync [{:keys [channel]}]
+(defn fsync [{:keys [^FileChannel channel]}]
   (.force channel true))
 
-(defn unmap [{:keys [size address channel] :as mapped-file}]
+(defn unmap [{:keys [size address ^FileChannel channel] :as mapped-file}]
   (fsync mapped-file)
   (.close channel)
   (.invoke unmap-c nil (object-array [address size])))

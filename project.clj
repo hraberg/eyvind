@@ -8,6 +8,7 @@
                  [clojure-msgpack "1.1.0"]
                  [org.zeromq/jeromq "0.3.4"]
                  [org.zeromq/cljzmq "0.1.4" :exclusions [org.zeromq/jzmq]]]
+  :global-vars {*warn-on-reflection* true}
   :java-source-paths ["src"]
   :javac-options ["-XDignore.symbol.file"]
   :jvm-opts ^:replace [])
