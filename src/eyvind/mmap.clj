@@ -1,4 +1,5 @@
 (ns eyvind.mmap
+  (:require [clojure.java.io :as io])
   (:import
    [java.io RandomAccessFile]
    [java.lang.reflect Field Method]
@@ -23,7 +24,7 @@
   (bit-and (+ x 0xfff) (bit-not 0xfff)))
 
 (defn mmap [file size]
-  (let [size (round-to-4096 size)
+  (let [size (round-to-4096 (max size (.length (io/file file))))
         channel (.getChannel (doto (RandomAccessFile. (str file) "rw")
                                (.setLength size)))]
     {:file file
