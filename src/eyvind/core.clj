@@ -104,6 +104,9 @@
 (defn biginteger->hex [^BigInteger x]
   (format "%040x" x))
 
+(defn hex->biginteger [x]
+  (BigInteger. (str x) 16))
+
 (defn ip []
   (->> (NetworkInterface/getNetworkInterfaces)
        enumeration-seq
