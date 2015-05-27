@@ -1,6 +1,8 @@
 (ns eyvind.core
-  (:require [eyvind.mmap :as mmap])
+  (:require [eyvind.mmap :as mmap]
+            [clojure.java.io :as io])
   (:import
+   [java.io DataOutputStream FileOutputStream DataInputStream FileInputStream]
    [java.net InetAddress NetworkInterface]
    [java.nio ByteBuffer ByteOrder]
    [java.security MessageDigest]
@@ -78,8 +80,8 @@
         (assoc :key (String. ^bytes entry-bytes 20 key-size "UTF-8")
                :bytes entry-bytes))))
 
-(defn scan-log [{:keys [log keydir] :as bc}]
-  (loop [offset 0 keydir keydir]
+(defn scan-log [{:keys [log keydir ^long offset] :as bc}]
+  (loop [offset offset keydir keydir]
     (let [crc (mmap/get-long log offset)]
       (if (zero? crc)
         (assoc bc :keydir keydir :offset offset)
@@ -90,6 +92,38 @@
                  (if (tombstone? entry)
                    (dissoc keydir key)
                    (assoc keydir key (dissoc entry :bytes :key)))))))))
+
+(defn hint-file ^String [{:keys [log]}]
+  (str (:file log) ".hint"))
+
+(defn write-hint-file [{:keys [keydir] :as bc}]
+  (with-open [out (DataOutputStream. (FileOutputStream. (hint-file bc)))]
+    (doseq [[^String k ^KeydirEntry v] keydir]
+      (let [key-bytes (.getBytes k "UTF-8")
+            key-size (count key-bytes)]
+        (doto out
+          (.writeLong (.ts v))
+          (.writeInt key-size)
+          (.writeLong (.value-size v))
+          (.writeLong (.value-offset v))
+          (.write key-bytes))))))
+
+(defn read-hint-file [{:keys [log keydir] :as bc}]
+  (let [hints (io/file (hint-file bc))]
+    (if (.exists hints)
+      (with-open [in (DataInputStream. (FileInputStream. hints))]
+        (loop [offset 0 keydir keydir]
+          (if (pos? (.available in))
+            (let [ts (.readLong in)
+                  key-size (.readInt in)
+                  value-size (.readLong in)
+                  value-offset (.readLong in)
+                  key-bytes (byte-array key-size)]
+              (.read in key-bytes)
+              (recur (max offset (+ value-offset value-size))
+                     (assoc keydir (String. key-bytes "UTF-8") (->KeydirEntry ts value-size value-offset))))
+            (assoc bc :keydir keydir :offset offset))))
+      bc)))
 
 (defn sha1 [x]
   (->> (doto (MessageDigest/getInstance "SHA-1")
