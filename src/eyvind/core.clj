@@ -1,6 +1,7 @@
 (ns eyvind.core
   (:import
    [java.nio ByteBuffer ByteOrder]
+   [java.security MessageDigest]
    [java.util.zip CRC32]))
 
 (set! *warn-on-reflection* true)
@@ -92,3 +93,12 @@
                  (if (tombstone? entry)
                    (dissoc keydir key)
                    (assoc keydir key (dissoc entry :bytes :key)))))))))
+
+(defn sha1 [x]
+  (->> (doto (MessageDigest/getInstance "SHA-1")
+         (.update (-> x str (.getBytes "UTF-8"))))
+       .digest
+       (BigInteger. 1)))
+
+(defn biginteger->hex [^BigInteger x]
+  (.toString x 16))
