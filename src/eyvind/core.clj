@@ -6,6 +6,7 @@
    [java.net InetAddress NetworkInterface]
    [java.nio ByteBuffer ByteOrder]
    [java.security MessageDigest]
+   [java.util LinkedHashMap]
    [java.util.zip CRC32]))
 
 (set! *warn-on-reflection* true)
@@ -124,6 +125,11 @@
                      (assoc keydir (String. key-bytes "UTF-8") (->KeydirEntry ts value-size value-offset))))
             (assoc bc :keydir keydir :offset offset))))
       bc)))
+
+(defn lru [^long size]
+  (proxy [LinkedHashMap] [size 0.75 true]
+    (removeEldestEntry [_]
+      (> (count this) size))))
 
 (defn sha1 [x]
   (->> (doto (MessageDigest/getInstance "SHA-1")
