@@ -107,10 +107,13 @@
 (defn hex->biginteger [x]
   (BigInteger. (str x) 16))
 
-(defn ip []
+(defn ips []
   (->> (NetworkInterface/getNetworkInterfaces)
        enumeration-seq
        (mapcat (comp enumeration-seq #(.getInetAddresses ^NetworkInterface %)))
-       (map #(.getHostAddress ^InetAddress %))
-       (remove #(re-find #"^127\." %))
+       (map #(.getHostAddress ^InetAddress %))))
+
+(defn ip []
+  (->> (ips)
+       (remove (partial re-find #"^127\."))
        first))
