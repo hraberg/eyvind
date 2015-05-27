@@ -1,4 +1,5 @@
 (ns eyvind.core
+  (:require [eyvind.mmap :as mmap])
   (:import
    [java.net InetAddress NetworkInterface]
    [java.nio ByteBuffer ByteOrder]
@@ -11,7 +12,7 @@
   ([file]
    (open-log file {}))
   ([file {:keys [size offset keydir] :or {size (* 1024 8) offset 0 keydir {}}}]
-   {:log (eyvind.MMapper. file size) :offset 0 :size size :keydir keydir :file file}))
+   {:log (mmap/mmap file size) :offset 0 :keydir keydir :file file}))
 
 (defn keydir-entry [ts k ^bytes v]
   (let [key-bytes (.getBytes (str k) "UTF-8")
@@ -36,54 +37,50 @@
 (defn put-entry
   ([bc k v]
    (put-entry bc (System/currentTimeMillis) k v))
-  ([{:keys [^eyvind.MMapper log offset size keydir file] :as bc} ts k v]
+  ([{:keys [log offset keydir file] :as bc} ts k v]
    (let [{:keys [bytes] :as entry} (keydir-entry ts k v)
          entry-size (+ 8 (count bytes))
          entry-start (+ 8 offset)
          keydir-entry (-> entry
                           (dissoc :bytes)
                           (update-in [:value-offset] + entry-start))
-         new-size (if (> (+ entry-size offset) size)
-                    (* 2 size)
-                    size)]
-     (when (not= new-size size)
-       (.remap log new-size))
-     (.putLong log offset (crc32 bytes))
-     (.setBytes log entry-start bytes)
+         size (:size log)
+         {:keys [log] :as bc} (cond-> bc
+                                (> (+ entry-size offset) size) (update-in [:log] mmap/remap (* 2 size)))]
+     (mmap/put-long log offset (crc32 bytes))
+     (mmap/put-bytes log entry-start bytes)
      (-> bc
          (update-in [:offset] + entry-size)
-         (update-in [:keydir] assoc k keydir-entry)
-         (assoc :size new-size)))))
+         (update-in [:keydir] assoc k keydir-entry)))))
 
 (defn tombstone? [{:keys [value-size]}]
   (zero? value-size))
 
-(defn get-entry [{:keys [^eyvind.MMapper log keydir] :as bc} k]
+(defn get-entry [{:keys [log keydir] :as bc} k]
   (when-let [{:keys [value-offset value-size] :as entry} (get keydir k)]
     (when-not (tombstone? entry)
-      (->> (byte-array value-size)
-           (.getBytes log (long value-offset))))))
+      (mmap/get-bytes log (long value-offset) (byte-array value-size)))))
 
-(defn remove-entry [{:keys [^eyvind.MMapper log keydir] :as bc} k]
+(defn remove-entry [bc k]
   (-> bc
       (put-entry k (byte-array 0))
       (update-in [:keydir] dissoc k)))
 
-(defn read-entry [{:keys [^eyvind.MMapper log]} offset]
-  (let [ts (.getLong log (+ 8 offset))
-        key-size (.getInt log (+ 16 offset))
-        value-size (.getLong log (+ 20 offset))
+(defn read-entry [{:keys [log]} offset]
+  (let [ts (mmap/get-long log (+ 8 offset))
+        key-size (mmap/get-int log (+ 16 offset))
+        value-size (mmap/get-long log (+ 20 offset))
         entry-size (+ 20 key-size value-size)
-        entry-bytes (->> (byte-array entry-size) (.getBytes log (+ 8 offset)))]
+        entry-bytes (mmap/get-bytes log (+ 8 offset) (byte-array entry-size))]
     {:key (String. entry-bytes 20 key-size "UTF-8")
      :ts ts
      :bytes entry-bytes
      :value-size value-size
      :value-offset (+ offset 28 key-size)}))
 
-(defn scan-log [{:keys [^eyvind.MMapper log keydir] :as bc}]
+(defn scan-log [{:keys [log keydir] :as bc}]
   (loop [offset 0 keydir keydir]
-    (let [crc (.getLong log offset)]
+    (let [crc (mmap/get-long log offset)]
       (if (zero? crc)
         (assoc bc :keydir keydir :offset offset)
         (let [{:keys [key bytes] :as entry} (read-entry bc offset)]
