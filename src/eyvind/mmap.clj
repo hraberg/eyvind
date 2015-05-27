@@ -10,6 +10,7 @@
 ;; Based on http://nyeggen.com/post/2014-05-18-memory-mapping-%3E2gb-of-data-in-java/
 
 (set! *warn-on-reflection* true)
+(set! *unchecked-math* :warn-on-boxed)
 
 (def ^Unsafe unsafe (let [field (doto (.getDeclaredField Unsafe "theUnsafe")
                                   (.setAccessible true))]
@@ -20,17 +21,17 @@
                        (.setAccessible true)))
 (def BYTE_ARRAY_OFFSET (.arrayBaseOffset unsafe (class (byte-array 0))))
 
-(defn round-to-4096 [x]
+(defn round-to-4096 [^long x]
   (bit-and (+ x 0xfff) (bit-not 0xfff)))
 
-(defn mmap [file size]
+(defrecord MappedFile [^String file ^long size ^long address ^FileChannel channel])
+
+(defn mmap [file ^long size]
   (let [size (round-to-4096 (max size (.length (io/file file))))
         channel (.getChannel (doto (RandomAccessFile. (str file) "rw")
-                               (.setLength size)))]
-    {:file file
-     :size size
-     :address (.invoke mmap-c channel (object-array [(int 1) 0 size]))
-     :channel channel}))
+                               (.setLength size)))
+        address (.invoke mmap-c channel (object-array [(int 1) 0 size]))]
+    (->MappedFile file size address channel)))
 
 (defn fsync [{:keys [^FileChannel channel]}]
   (.force channel true))
@@ -40,25 +41,25 @@
   (.close channel)
   (.invoke unmap-c nil (object-array [address size])))
 
-(defn remap [{:keys [file] :as mapped-file} new-size]
+(defn remap [{:keys [file] :as mapped-file} ^long new-size]
   (unmap mapped-file)
   (mmap file new-size))
 
-(defn get-int ^long [{:keys [address]} pos]
-  (.getInt unsafe (+ pos address)))
+(defn get-int ^long [^MappedFile mapped-file ^long pos]
+  (.getInt unsafe (+ pos (.address mapped-file))))
 
-(defn put-int [{:keys [address]} pos x]
-  (.putInt unsafe (+ pos address) x))
+(defn put-int [^MappedFile mapped-file ^long pos ^long x]
+  (.putInt unsafe (+ pos (.address mapped-file)) x))
 
-(defn get-long ^long [{:keys [address]} pos]
-  (.getLong unsafe (+ pos address)))
+(defn get-long ^long [^MappedFile mapped-file ^long pos]
+  (.getLong unsafe (+ pos (.address mapped-file))))
 
-(defn put-long [{:keys [address]} pos x]
-  (.putLong unsafe (+ pos address) x))
+(defn put-long [^MappedFile mapped-file ^long pos ^long x]
+  (.putLong unsafe (+ pos (.address mapped-file)) x))
 
-(defn get-bytes ^bytes [{:keys [address]} pos ^bytes bytes]
-  (.copyMemory unsafe nil (+ pos address) bytes BYTE_ARRAY_OFFSET (count bytes))
+(defn get-bytes ^bytes [^MappedFile mapped-file ^long pos ^bytes bytes]
+  (.copyMemory unsafe nil (+ pos (.address mapped-file)) bytes BYTE_ARRAY_OFFSET (count bytes))
   bytes)
 
-(defn put-bytes [{:keys [address]} pos ^bytes bytes]
-  (.copyMemory unsafe bytes BYTE_ARRAY_OFFSET nil (+ pos address) (count bytes)))
+(defn put-bytes [^MappedFile mapped-file ^long pos ^bytes bytes]
+  (.copyMemory unsafe bytes BYTE_ARRAY_OFFSET nil (+ pos (.address mapped-file)) (count bytes)))

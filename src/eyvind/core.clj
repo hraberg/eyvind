@@ -7,6 +7,7 @@
    [java.util.zip CRC32]))
 
 (set! *warn-on-reflection* true)
+(set! *unchecked-math* :warn-on-boxed)
 
 (defn open-log
   ([file]
@@ -37,14 +38,14 @@
 (defn put-entry
   ([bc k v]
    (put-entry bc (System/currentTimeMillis) k v))
-  ([{:keys [log offset keydir file sync?] :as bc} ts k v]
+  ([{:keys [^eyvind.mmap.MappedFile log ^long offset keydir file sync?] :as bc} ts k v]
    (let [{:keys [bytes] :as entry} (keydir-entry ts k v)
          entry-size (+ 8 (count bytes))
          entry-start (+ 8 offset)
          keydir-entry (-> entry
                           (dissoc :bytes)
                           (update-in [:value-offset] + entry-start))
-         size (:size log)
+         size (.size log)
          {:keys [log] :as bc} (cond-> bc
                                 (> (+ entry-size offset) size) (update-in [:log] mmap/remap (* 2 size)))]
      (mmap/put-long log offset (crc32 bytes))
@@ -55,26 +56,26 @@
          (update-in [:offset] + entry-size)
          (update-in [:keydir] assoc k keydir-entry)))))
 
-(defn tombstone? [{:keys [value-size]}]
+(defn tombstone? [{:keys [^long value-size]}]
   (zero? value-size))
 
 (defn get-entry [{:keys [log keydir] :as bc} k]
   (when-let [{:keys [value-offset value-size] :as entry} (get keydir k)]
     (when-not (tombstone? entry)
-      (mmap/get-bytes log (long value-offset) (byte-array value-size)))))
+      (mmap/get-bytes log value-offset (byte-array value-size)))))
 
 (defn remove-entry [bc k]
   (-> bc
       (put-entry k (byte-array 0))
       (update-in [:keydir] dissoc k)))
 
-(defn read-entry [{:keys [log]} offset]
+(defn read-entry [{:keys [log]} ^long offset]
   (let [ts (mmap/get-long log (+ 8 offset))
         key-size (mmap/get-int log (+ 16 offset))
         value-size (mmap/get-long log (+ 20 offset))
         entry-size (+ 20 key-size value-size)
         entry-bytes (mmap/get-bytes log (+ 8 offset) (byte-array entry-size))]
-    {:key (String. entry-bytes 20 key-size "UTF-8")
+    {:key (String. ^bytes entry-bytes 20 key-size "UTF-8")
      :ts ts
      :bytes entry-bytes
      :value-size value-size
