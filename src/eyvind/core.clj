@@ -11,7 +11,7 @@
   ([file]
    (open-log file {}))
   ([file {:keys [size offset keydir] :or {size (* 1024 8) offset 0 keydir {}}}]
-   {:log (eyvind.MMapper. file size) :offset 0 :size size :keydir keydir :active-file file}))
+   {:log (eyvind.MMapper. file size) :offset 0 :size size :keydir keydir :file file}))
 
 (defn keydir-entry [ts k ^bytes v]
   (let [key-bytes (.getBytes (str k) "UTF-8")
@@ -36,13 +36,12 @@
 (defn put-entry
   ([bc k v]
    (put-entry bc (System/currentTimeMillis) k v))
-  ([{:keys [^eyvind.MMapper log offset size keydir active-file] :as bc} ts k v]
+  ([{:keys [^eyvind.MMapper log offset size keydir file] :as bc} ts k v]
    (let [{:keys [bytes] :as entry} (keydir-entry ts k v)
          entry-size (+ 8 (count bytes))
          entry-start (+ 8 offset)
          keydir-entry (-> entry
                           (dissoc :bytes)
-                          (assoc :file active-file)
                           (update-in [:value-offset] + entry-start))
          new-size (if (> (+ entry-size offset) size)
                     (* 2 size)
