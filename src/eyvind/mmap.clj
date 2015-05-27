@@ -1,7 +1,7 @@
 (ns eyvind.mmap
   (:require [clojure.java.io :as io])
   (:import
-   [java.io RandomAccessFile]
+   [java.io RandomAccessFile Closeable]
    [java.lang.reflect Field Method]
    [java.nio.channels FileChannel]
    [sun.nio.ch FileChannelImpl]
@@ -24,7 +24,10 @@
 (defn round-to-4096 [^long x]
   (bit-and (+ x 0xfff) (bit-not 0xfff)))
 
-(defrecord MappedFile [^String file ^long length ^long address])
+(defrecord MappedFile [^String file ^long length ^long address]
+  Closeable
+  (close [this]
+    (unmap this)))
 
 (defn mmap [file ^long length]
   (let [length (round-to-4096 (max length (.length (io/file file))))]
