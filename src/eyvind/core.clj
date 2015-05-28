@@ -12,17 +12,12 @@
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
 
-(defn lru [^long size]
-  (proxy [LinkedHashMap] [size 0.75 true]
-    (removeEldestEntry [_]
-      (> (count this) size))))
-
 (defn open-log
   ([file]
-   (open-log file (* 8 1024) 1024 {}))
-  ([file length cache-size opts]
+   (open-log file (* 8 1024) {}))
+  ([file length opts]
    (-> (merge {:offset 0 :keydir {} :growth-factor 2 :sync? false} opts)
-       (assoc :log (mmap/mmap file length) :cache (lru cache-size)))))
+       (assoc :log (mmap/mmap file length)))))
 
 (defrecord KeydirEntry [^long ts ^long value-size ^long value-offset])
 
@@ -33,20 +28,22 @@
             (.putShort (int key-size))
             (.putInt value-size))))
 
+(defn long-bytes ^bytes [x]
+  (-> (ByteBuffer/allocate 8)
+      (.order (ByteOrder/nativeOrder))
+      (.putLong x)
+      .array))
+
+(defn entry-crc ^long [^bytes header-bytes ^bytes key-bytes ^bytes value-bytes]
+  (.getValue (doto (CRC32.)
+               (.update header-bytes)
+               (.update key-bytes)
+               (.update value-bytes))))
+
 (defn maybe-grow-log [{:keys [^eyvind.mmap.MappedFile log ^long offset ^long growth-factor] :as bc} ^long needed]
   (let [length (.length log)]
     (cond-> bc
       (> (+ offset needed) length) (update-in [:log] mmap/remap (* growth-factor length)))))
-
-(defn entry-crc ^bytes [^bytes header-bytes ^bytes key-bytes ^bytes value-bytes]
-  (let [crc (.getValue (doto (CRC32.)
-                         (.update header-bytes)
-                         (.update key-bytes)
-                         (.update value-bytes)))]
-    (-> (ByteBuffer/allocate 8)
-        (.order (ByteOrder/nativeOrder))
-        (.putLong crc)
-        .array)))
 
 (defn put-entry
   ([bc ^String k ^bytes v]
@@ -54,7 +51,7 @@
   ([bc ^long ts ^String k ^bytes v]
    (let [key-bytes (.getBytes k "UTF-8")
          header-bytes (header ts (count key-bytes) (count v))
-         crc-bytes (entry-crc header-bytes key-bytes v)
+         crc-bytes (long-bytes (entry-crc header-bytes key-bytes v))
          entry-size (+ (count crc-bytes) (count header-bytes) (count key-bytes) (count v))
          {:keys [^eyvind.mmap.MappedFile log ^long offset sync?] :as bc} (maybe-grow-log bc entry-size)
          value-offset (+ offset (- entry-size (count v)))]
@@ -66,25 +63,20 @@
        (cond-> sync? (-> .getFD .sync)))
      (-> bc
          (update-in [:offset] + entry-size)
-         (update-in [:keydir] assoc k (->KeydirEntry ts (count v) value-offset))
-         (update-in [:cache] #(doto ^LinkedHashMap % (.put k v)))))))
+         (update-in [:keydir] assoc k (->KeydirEntry ts (count v) value-offset))))))
 
 (defn tombstone? [^KeydirEntry entry]
   (zero? (.value-size entry)))
 
-(defn get-entry [{:keys [log keydir ^LinkedHashMap cache]} k]
-  (if (contains? cache k)
-    (get cache k)
-    (when-let [^KeydirEntry entry (get keydir k)]
-      (when-not (tombstone? entry)
-        (doto (mmap/get-bytes log (.value-offset entry) (byte-array (.value-size entry)))
-          (->> (.put cache k)))))))
+(defn get-entry [{:keys [log keydir]} k]
+  (when-let [^KeydirEntry entry (get keydir k)]
+    (when-not (tombstone? entry)
+      (mmap/get-bytes log (.value-offset entry) (byte-array (.value-size entry))))))
 
 (defn remove-entry [bc k]
   (-> bc
       (put-entry k (byte-array 0))
-      (update-in [:keydir] dissoc k)
-      (update-in [:cache] #(doto ^LinkedHashMap % (.remove k)))))
+      (update-in [:keydir] dissoc k)))
 
 (defn scan-log [{:keys [^eyvind.mmap.MappedFile log keydir ^long offset] :as bc}]
   (loop [offset offset keydir keydir]
@@ -139,6 +131,11 @@
               (recur (max offset (+ value-offset value-size))
                      (assoc keydir (String. key-bytes "UTF-8") (->KeydirEntry ts value-size value-offset)))))))
       bc)))
+
+(defn lru [^long size]
+  (proxy [LinkedHashMap] [size 0.75 true]
+    (removeEldestEntry [_]
+      (> (count this) size))))
 
 ;; Consistent Hashing
 
