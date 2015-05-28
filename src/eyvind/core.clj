@@ -38,22 +38,24 @@
     (cond-> bc
       (> (+ offset needed) length) (update-in [:log] mmap/remap (* growth-factor length)))))
 
+(defn entry-crc ^long [^bytes header-bytes ^bytes key-bytes ^bytes value-bytes]
+  (.getValue (doto (CRC32.)
+               (.update header-bytes)
+               (.update key-bytes)
+               (.update value-bytes))))
+
 (defn put-entry
   ([bc ^String k ^bytes v]
    (put-entry bc (System/currentTimeMillis) k v))
   ([bc ^long ts ^String k ^bytes v]
    (let [key-bytes (.getBytes k "UTF-8")
          header-bytes (header ts (count key-bytes) (count v))
-         header-offset 8
-         entry-size (+ header-offset (count header-bytes) (count key-bytes) (count v))
+         entry-size (+ 8 (count header-bytes) (count key-bytes) (count v))
          {:keys [^eyvind.mmap.MappedFile log ^long offset] :as bc} (maybe-grow-log bc entry-size)
-         key-offset (+ header-offset (count header-bytes) offset)
-         value-offset (+ key-offset (count key-bytes))
-         crc (.getValue (doto (CRC32.)
-                          (.update ^bytes header-bytes)
-                          (.update key-bytes)
-                          (.update v)))]
-     (mmap/put-long log offset crc)
+         header-offset (+ 8 offset)
+         key-offset (+ header-offset (count header-bytes))
+         value-offset (+ key-offset (count key-bytes))]
+     (mmap/put-long log offset (entry-crc header-bytes key-bytes v))
      (mmap/put-bytes log header-offset header-bytes)
      (mmap/put-bytes log key-offset key-bytes)
      (mmap/put-bytes log value-offset v)
@@ -65,7 +67,7 @@
 (defn tombstone? [^KeydirEntry entry]
   (zero? (.value-size entry)))
 
-(defn get-entry [{:keys [log keydir ^LinkedHashMap cache] :as bc} k]
+(defn get-entry [{:keys [log keydir ^LinkedHashMap cache]} k]
   (if (contains? cache k)
     (get cache k)
     (when-let [^KeydirEntry entry (get keydir k)]
