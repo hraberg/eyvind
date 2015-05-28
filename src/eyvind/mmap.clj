@@ -3,6 +3,7 @@
   (:import
    [java.io RandomAccessFile Closeable]
    [java.lang.reflect Field Method]
+   [java.util.zip CRC32]
    [java.nio.channels FileChannel]
    [sun.nio.ch FileChannelImpl]
    [sun.misc Unsafe]))
@@ -63,3 +64,10 @@
 
 (defn put-bytes [^MappedFile mapped-file ^long pos ^bytes bytes]
   (.copyMemory unsafe bytes BYTE_ARRAY_OFFSET nil (+ pos (.address mapped-file)) (count bytes)))
+
+(defn crc-checksum ^long [^MappedFile mapped-file ^long pos ^long length]
+  (let [address (+ pos (.address mapped-file))
+        crc (CRC32.)]
+    (dotimes [n length]
+      (.update crc (.getByte unsafe (+ n address))))
+    (.getValue crc)))
