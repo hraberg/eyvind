@@ -53,27 +53,15 @@
 (defn get-int ^long [^MappedFile mapped-file ^long pos]
   (.getInt unsafe (+ pos (.address mapped-file))))
 
-(defn put-int [^MappedFile mapped-file ^long pos ^long x]
-  (.putInt unsafe (+ pos (.address mapped-file)) x))
-
 (defn get-short ^long [^MappedFile mapped-file ^long pos]
   (long (.getShort unsafe (+ pos (.address mapped-file)))))
-
-(defn put-short [^MappedFile mapped-file ^long pos ^long x]
-  (.putShort unsafe (+ pos (.address mapped-file)) x))
 
 (defn get-long ^long [^MappedFile mapped-file ^long pos]
   (.getLong unsafe (+ pos (.address mapped-file))))
 
-(defn put-long [^MappedFile mapped-file ^long pos ^long x]
-  (.putLong unsafe (+ pos (.address mapped-file)) x))
-
 (defn get-bytes ^bytes [^MappedFile mapped-file ^long pos ^bytes bytes]
   (.copyMemory unsafe nil (+ pos (.address mapped-file)) bytes BYTE_ARRAY_OFFSET (count bytes))
   bytes)
-
-(defn put-bytes [^MappedFile mapped-file ^long pos ^bytes bytes]
-  (.copyMemory unsafe bytes BYTE_ARRAY_OFFSET nil (+ pos (.address mapped-file)) (count bytes)))
 
 (defn crc-checksum ^long [^MappedFile mapped-file ^long pos ^long length]
   (let [address (+ pos (.address mapped-file))
