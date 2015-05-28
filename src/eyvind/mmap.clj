@@ -52,6 +52,12 @@
 (defn put-int [^MappedFile mapped-file ^long pos ^long x]
   (.putInt unsafe (+ pos (.address mapped-file)) x))
 
+(defn get-short ^long [^MappedFile mapped-file ^long pos]
+  (long (.getShort unsafe (+ pos (.address mapped-file)))))
+
+(defn put-short [^MappedFile mapped-file ^long pos ^long x]
+  (.putShort unsafe (+ pos (.address mapped-file)) x))
+
 (defn get-long ^long [^MappedFile mapped-file ^long pos]
   (.getLong unsafe (+ pos (.address mapped-file))))
 
