@@ -35,6 +35,9 @@
       (.putLong x)
       .array))
 
+(defn str-bytes ^bytes [^String s]
+  (.getBytes s "UTF-8"))
+
 (defn entry-crc ^long [^bytes header-bytes ^bytes key-bytes ^bytes value-bytes]
   (.getValue (doto (CRC32.)
                (.update header-bytes)
@@ -50,19 +53,16 @@
   ([bc ^String k ^bytes v]
    (put-entry bc (System/currentTimeMillis) k v))
   ([bc ^long ts ^String k ^bytes v]
-   (let [key-bytes (.getBytes k "UTF-8")
-         tombstone? (nil? v)
-         v (or v (byte-array 0))
-         header-bytes (header ts (count key-bytes) (if tombstone?
-                                                     -1
-                                                     (count v)))
-         crc-bytes (long-bytes (entry-crc header-bytes key-bytes v))
+   (let [key-bytes (str-bytes k)]
+     (put-entry bc ts (header ts (count key-bytes) (count v)) k key-bytes v)))
+  ([bc ts ^bytes header-bytes k ^bytes key-bytes ^bytes v]
+   (let [crc-bytes (long-bytes (entry-crc header-bytes key-bytes v))
          entry-size (+ (count crc-bytes) (count header-bytes) (count key-bytes) (count v))
          {:keys [^eyvind.mmap.MappedFile log ^long offset sync?] :as bc} (maybe-grow-log bc entry-size)
          value-offset (+ offset (- entry-size (count v)))]
      (doto ^RandomAccessFile (.backing-file log)
        (.write crc-bytes)
-       (.write ^bytes header-bytes)
+       (.write header-bytes)
        (.write key-bytes)
        (.write v)
        (cond-> sync? (-> .getFD .sync)))
@@ -70,18 +70,16 @@
          (update-in [:offset] + entry-size)
          (update-in [:keydir] assoc k (->KeydirEntry ts (count v) value-offset))))))
 
-(defn tombstone? [^KeydirEntry entry]
-  (= -1 (.value-size entry)))
-
 (defn get-entry [{:keys [log keydir]} k]
   (when-let [^KeydirEntry entry (get keydir k)]
-    (when-not (tombstone? entry)
-      (mmap/get-bytes log (.value-offset entry) (byte-array (.value-size entry))))))
+    (mmap/get-bytes log (.value-offset entry) (byte-array (.value-size entry)))))
 
-(defn remove-entry [bc k]
-  (-> bc
-      (put-entry k nil)
-      (update-in [:keydir] dissoc k)))
+(defn remove-entry [bc ^String k]
+  (let [key-bytes (str-bytes k)
+        ts (System/currentTimeMillis)]
+    (-> bc
+        (put-entry ts (header ts (count key-bytes) -1) k key-bytes (byte-array 0))
+        (update-in [:keydir] dissoc k))))
 
 (defn scan-log [{:keys [^eyvind.mmap.MappedFile log keydir ^long offset] :as bc}]
   (loop [offset offset keydir keydir]
@@ -92,19 +90,19 @@
         (let [ts (mmap/get-long log (+ 8 offset))
               key-size (mmap/get-short log (+ 16 offset))
               value-size (mmap/get-int log (+ 18 offset))
-              actual-value-size (max value-size 0)
-              entry-size (+ 14 key-size actual-value-size)]
+              tombstone? (= -1 value-size)
+              value-size (max value-size 0)
+              entry-size (+ 14 key-size value-size)]
           (when-not (= crc (mmap/crc-checksum log (+ 8 offset) entry-size))
             (throw (IllegalStateException. (str "CRC check failed at offset: " offset))))
           (let [key-offset (+ 22 offset)
                 key-bytes (mmap/get-bytes log key-offset (byte-array key-size))
                 k (String. ^bytes key-bytes "UTF-8")
-                value-offset (+ key-offset key-size)
-                entry (->KeydirEntry ts value-size value-offset)]
-            (recur (+ value-offset actual-value-size)
-                   (if (tombstone? entry)
+                value-offset (+ key-offset key-size)]
+            (recur (+ value-offset value-size)
+                   (if tombstone?
                      (dissoc keydir k)
-                     (assoc keydir k entry)))))))))
+                     (assoc keydir k (->KeydirEntry ts value-size value-offset))))))))))
 
 (defn hint-file ^String [{:keys [log]}]
   (str (:file log) ".hint"))
@@ -112,7 +110,7 @@
 (defn write-hint-file [{:keys [keydir] :as bc}]
   (with-open [out (RandomAccessFile. (hint-file bc) "rw")]
     (doseq [[^String k ^KeydirEntry v] keydir
-            :let [key-bytes (.getBytes k "UTF-8")]]
+            :let [key-bytes (str-bytes k)]]
       (doto out
         (.writeLong (.ts v))
         (.writeShort (count key-bytes))
