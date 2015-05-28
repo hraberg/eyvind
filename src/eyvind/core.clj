@@ -27,38 +27,39 @@
 (defrecord KeydirEntry [^long ts ^long value-size ^long value-offset])
 
 (defn keydir-entry [ts k ^bytes v]
-  (let [key-bytes (.getBytes (str k) "UTF-8")
-        key-size (count key-bytes)
-        value-size (count v)]
-    (-> (->KeydirEntry ts value-size (+ 20 key-size))
-        (assoc :bytes (-> (ByteBuffer/allocate (+ 20 key-size value-size))
-                          (.order (ByteOrder/nativeOrder))
-                          (.putLong ts)
-                          (.putInt key-size)
-                          (.putLong value-size)
-                          (.put key-bytes)
-                          (.put v)
-                          .array)))))
+  (let [key-bytes (.getBytes (str k) "UTF-8")]
+    (-> (->KeydirEntry ts (count v) (+ 20 (count key-bytes)))
+        (assoc :key-bytes key-bytes :value-bytes v))))
 
-(defn crc32 [^bytes bytes]
+(defn crc32 [{:keys [^bytes key-bytes ^bytes value-bytes] :as ^KeydirEntry entry}]
   (.getValue (doto (CRC32.)
-               (.update bytes))))
+               (.update (doto (ByteBuffer/allocate 20)
+                          (.order (ByteOrder/nativeOrder))
+                          (.putLong (.ts entry))
+                          (.putInt (int (count key-bytes)))
+                          (.putLong (count value-bytes))
+                          .array))
+               (.update key-bytes)
+               (.update value-bytes))))
 
 (defn put-entry
   ([bc k v]
    (put-entry bc (System/currentTimeMillis) k v))
   ([{:keys [^eyvind.mmap.MappedFile log ^long offset keydir file ^long growth-factor] :as bc} ts k v]
-   (let [{:keys [bytes] :as entry} (keydir-entry ts k v)
-         entry-size (+ 8 (count bytes))
-         entry-start (+ 8 offset)
+   (let [{:keys [key-bytes value-bytes] :as ^KeydirEntry entry} (keydir-entry ts k v)
+         entry-size (+ 20 (count key-bytes) (count value-bytes))
          keydir-entry (-> entry
                           (dissoc :bytes)
-                          (update-in [:value-offset] + entry-start))
+                          (update-in [:value-offset] + (+ 8 offset)))
          length (.length log)
          {:keys [log] :as bc} (cond-> bc
                                 (> (+ entry-size offset) length) (update-in [:log] mmap/remap (* growth-factor length)))]
-     (mmap/put-long log offset (crc32 bytes))
-     (mmap/put-bytes log entry-start bytes)
+     (mmap/put-long log offset (crc32 entry))
+     (mmap/put-long log (+ 8 offset) (.ts entry))
+     (mmap/put-int log (+ 16 offset) (int (count key-bytes)))
+     (mmap/put-long log (+ 20 offset) (count value-bytes))
+     (mmap/put-bytes log (+ 28 offset) key-bytes)
+     (mmap/put-bytes log (+ 28 (count key-bytes) offset) value-bytes)
      (-> bc
          (update-in [:offset] + entry-size)
          (update-in [:keydir] assoc k keydir-entry)
@@ -85,21 +86,21 @@
   (let [ts (mmap/get-long log (+ 8 offset))
         key-size (mmap/get-int log (+ 16 offset))
         value-size (mmap/get-long log (+ 20 offset))
-        entry-size (+ 20 key-size value-size)
-        entry-bytes (mmap/get-bytes log (+ 8 offset) (byte-array entry-size))]
+        key-bytes (mmap/get-bytes log (+ 28 offset) (byte-array key-size))
+        value-bytes (mmap/get-bytes log (+ 28 offset key-size) (byte-array value-size))]
     (-> (->KeydirEntry ts value-size (+ offset 28 key-size))
-        (assoc :key (String. ^bytes entry-bytes 20 key-size "UTF-8")
-               :bytes entry-bytes))))
+        (assoc :key-bytes key-bytes :value-bytes value-bytes))))
 
 (defn scan-log [{:keys [log keydir ^long offset] :as bc}]
   (loop [offset offset keydir keydir]
     (let [crc (mmap/get-long log offset)]
       (if (zero? crc)
         (assoc bc :keydir keydir :offset offset)
-        (let [{:keys [key bytes] :as entry} (read-entry bc offset)]
-          (when-not (= crc (crc32 bytes))
+        (let [{:keys [key-bytes value-bytes] :as entry} (read-entry bc offset)
+              key (String. ^bytes key-bytes "UTF-8")]
+          (when-not (= crc (crc32 entry))
             (throw (IllegalStateException. (str "CRC check failed at offset: " offset))))
-          (recur (+ offset 8 (count bytes))
+          (recur (+ offset 28 (count key-bytes) (count value-bytes))
                  (if (tombstone? entry)
                    (dissoc keydir key)
                    (assoc keydir key (dissoc entry :bytes :key)))))))))
