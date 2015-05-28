@@ -74,11 +74,13 @@
   (when-let [^KeydirEntry entry (get keydir k)]
     (mmap/get-bytes log (.value-offset entry) (byte-array (.value-size entry)))))
 
+(def tombstone-size -1)
+
 (defn remove-entry [bc ^String k]
   (let [key-bytes (str-bytes k)
         ts (System/currentTimeMillis)]
     (-> bc
-        (put-entry ts (header ts (count key-bytes) -1) k key-bytes (byte-array 0))
+        (put-entry ts (header ts (count key-bytes) tombstone-size) k key-bytes (byte-array 0))
         (update-in [:keydir] dissoc k))))
 
 (defn scan-log [{:keys [^eyvind.mmap.MappedFile log keydir ^long offset] :as bc}]
@@ -90,7 +92,7 @@
         (let [ts (mmap/get-long log (+ 8 offset))
               key-size (mmap/get-short log (+ 16 offset))
               value-size (mmap/get-int log (+ 18 offset))
-              tombstone? (= -1 value-size)
+              tombstone? (= tombstone-size value-size)
               value-size (max value-size 0)
               entry-size (+ 14 key-size value-size)]
           (when-not (= crc (mmap/crc-checksum log (+ 8 offset) entry-size))
