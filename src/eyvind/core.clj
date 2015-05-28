@@ -21,7 +21,7 @@
   ([file]
    (open-log file (* 8 1024) 1024 {}))
   ([file length cache-size opts]
-   (-> (merge {:offset 0 :keydir {} :growth-factor 2} opts)
+   (-> (merge {:offset 0 :keydir {} :growth-factor 2 :sync? false} opts)
        (assoc :log (mmap/mmap file length) :cache (lru cache-size)))))
 
 (defrecord KeydirEntry [^long ts ^long value-size ^long value-offset])
@@ -38,11 +38,15 @@
     (cond-> bc
       (> (+ offset needed) length) (update-in [:log] mmap/remap (* growth-factor length)))))
 
-(defn entry-crc ^long [^bytes header-bytes ^bytes key-bytes ^bytes value-bytes]
-  (.getValue (doto (CRC32.)
-               (.update header-bytes)
-               (.update key-bytes)
-               (.update value-bytes))))
+(defn entry-crc ^bytes [^bytes header-bytes ^bytes key-bytes ^bytes value-bytes]
+  (let [crc (.getValue (doto (CRC32.)
+                         (.update header-bytes)
+                         (.update key-bytes)
+                         (.update value-bytes)))]
+    (-> (ByteBuffer/allocate 8)
+        (.order (ByteOrder/nativeOrder))
+        (.putLong crc)
+        .array)))
 
 (defn put-entry
   ([bc ^String k ^bytes v]
@@ -50,15 +54,16 @@
   ([bc ^long ts ^String k ^bytes v]
    (let [key-bytes (.getBytes k "UTF-8")
          header-bytes (header ts (count key-bytes) (count v))
-         entry-size (+ 8 (count header-bytes) (count key-bytes) (count v))
-         {:keys [^eyvind.mmap.MappedFile log ^long offset] :as bc} (maybe-grow-log bc entry-size)
-         header-offset (+ 8 offset)
-         key-offset (+ header-offset (count header-bytes))
-         value-offset (+ key-offset (count key-bytes))]
-     (mmap/put-long log offset (entry-crc header-bytes key-bytes v))
-     (mmap/put-bytes log header-offset header-bytes)
-     (mmap/put-bytes log key-offset key-bytes)
-     (mmap/put-bytes log value-offset v)
+         crc-bytes (entry-crc header-bytes key-bytes v)
+         entry-size (+ (count crc-bytes) (count header-bytes) (count key-bytes) (count v))
+         {:keys [^eyvind.mmap.MappedFile log ^long offset sync?] :as bc} (maybe-grow-log bc entry-size)
+         value-offset (+ offset (- entry-size (count v)))]
+     (doto ^RandomAccessFile (.backing-file log)
+       (.write crc-bytes)
+       (.write ^bytes header-bytes)
+       (.write key-bytes)
+       (.write v)
+       (cond-> sync? (-> .getFD .sync)))
      (-> bc
          (update-in [:offset] + entry-size)
          (update-in [:keydir] assoc k (->KeydirEntry ts (count v) value-offset))
@@ -81,11 +86,13 @@
       (update-in [:keydir] dissoc k)
       (update-in [:cache] #(doto ^LinkedHashMap % (.remove k)))))
 
-(defn scan-log [{:keys [log keydir ^long offset] :as bc}]
+(defn scan-log [{:keys [^eyvind.mmap.MappedFile log keydir ^long offset] :as bc}]
   (loop [offset offset keydir keydir]
     (let [crc (mmap/get-long log offset)]
       (if (zero? crc)
-        (assoc bc :keydir keydir :offset offset)
+        (-> bc
+            (update-in [:log :backing-file] #(doto ^RandomAccessFile % (.seek offset)))
+            (assoc :keydir keydir :offset offset))
         (let [ts (mmap/get-long log (+ 8 offset))
               key-size (mmap/get-short log (+ 16 offset))
               value-size (mmap/get-int log (+ 18 offset))

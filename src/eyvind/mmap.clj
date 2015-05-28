@@ -27,24 +27,28 @@
 
 (declare unmap)
 
-(defrecord MappedFile [^String file ^long length ^long address]
+(defrecord MappedFile [^String file ^long length ^long address ^RandomAccessFile backing-file]
   Closeable
   (close [this]
+    (.close backing-file)
     (unmap this)))
 
-(defn mmap [file ^long length]
-  (let [length (round-to-4096 (max length (.length (io/file file))))]
-    (with-open [backing-file (RandomAccessFile. (str file) "rw")
-                channel (.getChannel (doto backing-file
-                                       (.setLength length)))]
-      (->MappedFile file length (.invoke mmap-c channel (object-array [(int 1) 0 length]))))))
+(defn mmap
+  ([file ^long length]
+   (mmap file (RandomAccessFile. (str file) "rw") length))
+  ([file ^RandomAccessFile backing-file ^long length]
+   (let [length (round-to-4096 (max length (.length (io/file file))))
+         backing-file (doto backing-file
+                        (.setLength length))
+         channel (.getChannel backing-file)]
+     (->MappedFile file length (.invoke mmap-c channel (object-array [(int 1) 0 length])) backing-file))))
 
-(defn unmap [{:keys [length address]}]
+(defn unmap [{:keys [length address ^RandomAccessFile backing-file]}]
   (.invoke unmap-c nil (object-array [address length])))
 
-(defn remap [{:keys [file] :as mapped-file} ^long new-length]
+(defn remap [{:keys [file backing-file] :as mapped-file} ^long new-length]
   (unmap mapped-file)
-  (mmap file new-length))
+  (mmap file backing-file new-length))
 
 (defn get-int ^long [^MappedFile mapped-file ^long pos]
   (.getInt unsafe (+ pos (.address mapped-file))))
