@@ -189,6 +189,7 @@
 (defn node-prefix [{:keys [ip] :as node} vnode]
   (str "node-" (:ip node) "/vnode-" vnode))
 
+;; TODO: Figure out parititioning of keys (modulo?) as in the Riak explaination.
 (defn join-hash-ring [vnodes hash-ring node]
   (->> (for [vnode (range vnodes)
              :let [prefix (node-prefix node vnode)]]
