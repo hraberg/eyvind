@@ -51,13 +51,13 @@
   ([bc ^long ts ^String k ^bytes v]
    (let [key-bytes (str-bytes k)]
      (put-entry bc ts (header ts (count key-bytes) (count v)) k key-bytes v)))
-  ([{:keys [^long growth-factor] :as bc} ts ^bytes header-bytes k ^bytes key-bytes ^bytes v]
+  ([{:keys [^eyvind.mmap.MappedFile log ^long growth-factor sync?] :as bc} ts ^bytes header-bytes k ^bytes key-bytes ^bytes v]
    (let [crc-bytes (long-bytes (entry-crc header-bytes key-bytes v))
          entry-size (+ (count crc-bytes) (count header-bytes) (count key-bytes) (count v))
-         {:keys [^eyvind.mmap.MappedFile log ^long offset sync?] :as bc} (update-in bc [:log]
-                                                                                    mmap/ensure-capacity growth-factor entry-size)
-         value-offset (+ offset (- entry-size (count v)))]
-     (doto ^RandomAccessFile (.backing-file log)
+         backing-file  ^RandomAccessFile (.backing-file log)
+         value-offset (+ (.getFilePointer backing-file) (- entry-size (count v)))
+         bc (update-in bc [:log] mmap/ensure-capacity growth-factor entry-size)]
+     (doto backing-file
        (.write ^bytes crc-bytes)
        (.write header-bytes)
        (.write key-bytes)
