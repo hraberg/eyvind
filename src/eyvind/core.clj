@@ -29,7 +29,7 @@
       (.putInt value-size)
       .array))
 
-(defn long-bytes ^bytes [x]
+(defn long-bytes ^bytes [^long x]
   (-> (ByteBuffer/allocate 8)
       (.order (ByteOrder/nativeOrder))
       (.putLong x)
@@ -49,6 +49,7 @@
     (cond-> bc
       (> (+ offset needed) length) (update-in [:log] mmap/remap (* growth-factor length)))))
 
+;; split this into put-entry and write-entry, the latter reused by remove-entry.
 (defn put-entry
   ([bc ^String k ^bytes v]
    (put-entry bc (System/currentTimeMillis) k v))
@@ -61,7 +62,7 @@
          {:keys [^eyvind.mmap.MappedFile log ^long offset sync?] :as bc} (maybe-grow-log bc entry-size)
          value-offset (+ offset (- entry-size (count v)))]
      (doto ^RandomAccessFile (.backing-file log)
-       (.write crc-bytes)
+       (.write ^bytes crc-bytes)
        (.write header-bytes)
        (.write key-bytes)
        (.write v)
@@ -166,3 +167,5 @@
   (->> (ips)
        (remove (partial re-find #"^127\."))
        first))
+
+;; TODO: comment showing atom use.
