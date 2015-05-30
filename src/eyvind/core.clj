@@ -19,9 +19,8 @@
 (defn open-log
   ([file]
    (open-log file (* 8 1024) {}))
-  ([file length opts]
-   (let [log (mmap/mmap file length)]
-     (map->DiskStore (merge {:keydir {} :sync? false :growth-factor 2 :log log} opts)))))
+  ([file length {:keys [sync? growth-factor] :or {sync? false growth-factor 2}}]
+   (->DiskStore {} sync? growth-factor (mmap/mmap-file file length))))
 
 (defn header ^bytes [^long ts ^long key-size ^long value-size]
   (-> (ByteBuffer/allocate 14)
