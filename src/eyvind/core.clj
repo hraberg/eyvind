@@ -86,7 +86,7 @@
   (let [backing-file ^RandomAccessFile (.backing-file log)]
     (loop [offset (.getFilePointer backing-file) keydir keydir]
       (let [crc (mmap/get-long log offset)]
-        (if (zero? crc)
+        (if (or (zero? crc) (= offset (.length backing-file)))
           (do (.seek backing-file offset)
               (assoc bc :keydir keydir))
           (let [ts (mmap/get-long log (+ 8 offset))
