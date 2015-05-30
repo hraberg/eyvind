@@ -147,8 +147,11 @@
                      (assoc keydir (String. key-bytes "UTF-8") (->KeydirEntry ts value-size value-offset)))))))
       bc)))
 
-(defn init-store [log-file]
-  (-> log-file open-log read-hint-file scan-log))
+(defn init-store
+  ([log-file]
+   (init-store log-file {}))
+  ([log-file opts]
+   (-> log-file (open-log opts) read-hint-file scan-log)))
 
 (defn lru [^long size]
   (proxy [LinkedHashMap] [size 0.75 true]
