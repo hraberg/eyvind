@@ -13,14 +13,15 @@
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
 
+(defrecord DiskStore [keydir sync? ^long growth-factor ^MappedFile log])
+(defrecord KeydirEntry [^long ts ^long value-size ^long value-offset])
+
 (defn open-log
   ([file]
    (open-log file (* 8 1024) {}))
   ([file length opts]
-   (-> (merge {:keydir {} :sync? false :growth-factor 2} opts)
-       (assoc :log (mmap/mmap file length)))))
-
-(defrecord KeydirEntry [^long ts ^long value-size ^long value-offset])
+   (let [log (mmap/mmap file length)]
+     (map->DiskStore (merge {:keydir {} :sync? false :growth-factor 2 :log log} opts)))))
 
 (defn header ^bytes [^long ts ^long key-size ^long value-size]
   (-> (ByteBuffer/allocate 14)
@@ -138,6 +139,9 @@
                      (assoc keydir (String. key-bytes "UTF-8") (->KeydirEntry ts value-size value-offset)))))))
       bc)))
 
+(defn init-store [log-file]
+  (-> log-file open-log read-hint-file scan-log))
+
 (defn lru [^long size]
   (proxy [LinkedHashMap] [size 0.75 true]
     (removeEldestEntry [_]
@@ -168,4 +172,9 @@
        (remove (partial re-find #"^127\."))
        first))
 
-;; TODO: comment showing atom use.
+(comment
+
+  (def bc (atom (init-store "test.log")))
+
+  (swap! bc put-entry "foo" (.getBytes "bar" "UTF-8"))
+  (String. (get-entry @bc "foo") "UTF-8"))
