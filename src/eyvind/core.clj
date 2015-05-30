@@ -214,27 +214,32 @@
 
 (def ^:dynamic *partitions* 64)
 
-(defn join-hash-ring [vnodes hash-ring node]
-  (let [log (when (:local? node)
-              {:log (init-store (str "node-" (:ip node) ".log"))})]
-    (->> (for [vnode (range vnodes)
-               :let [prefix (node-prefix node vnode)]]
-           [(consistent-hash prefix)
-            (merge {:node node :vnode vnode} log)])
-         (into hash-ring))))
+(defn nodes-in-hash-ring [hash-ring]
+  (->> hash-ring
+       vals
+       (map :node)
+       distinct))
 
-(defn depart-hash-ring [hash-ring node]
-  (->> (range *partitions*)
-       (map (comp consistent-hash (partial node-prefix node)))
-       (reduce dissoc hash-ring)))
+(defn vnodes-for-node [vnodes node]
+  (->> (for [vnode (range vnodes)]
+         [(consistent-long-hash (node-prefix node vnode))
+          {:node node :vnode vnode}])
+       (into {})))
 
 (defn create-hash-ring [servers]
   (let [partitions-per-node (long (/ ^long *partitions* (count servers)))]
-    (reduce (partial join-hash-ring partitions-per-node)
-            (sorted-map) servers)))
+    (->> servers
+         (map (partial vnodes-for-node partitions-per-node))
+         (apply merge (sorted-map)))))
+
+(defn join-hash-ring [hash-ring node]
+  (create-hash-ring (cons node (nodes-in-hash-ring hash-ring))))
+
+(defn depart-hash-ring [hash-ring node]
+  (create-hash-ring (remove #{node} (nodes-in-hash-ring hash-ring))))
 
 (defn nodes-for-key [hash-ring replicas k]
-  (->> (concat (subseq hash-ring > (consistent-hash k))
+  (->> (concat (subseq hash-ring > (consistent-long-hash k))
                (cycle hash-ring))
        (take replicas)
        (map val)))
@@ -246,8 +251,8 @@
   (swap! bc put-entry "foo" (.getBytes "bar" "UTF-8"))
   (String. (get-entry @bc "foo") "UTF-8")
 
-  (let [vnodes 3
-        replicas 3
-        hash-ring (create-hash-ring [{:ip (ip) :port "5555" :local? true}
-                                     {:ip (ip) :port "5555"}])]
+  (let [replicas 3
+        hash-ring (create-hash-ring [{:ip (str (ip) "-1") :port "5555"}
+                                     {:ip (str (ip) "-2") :port "5555"}
+                                     {:ip (str (ip) "-3") :port "5555"}])]
     (nodes-for-key hash-ring replicas "foo")))
