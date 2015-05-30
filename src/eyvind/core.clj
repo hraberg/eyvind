@@ -218,35 +218,33 @@
 
 (def ^:dynamic *partitions* 64)
 
-(defn nodes-in-hash-ring [hash-ring]
-  (->> hash-ring
-       vals
-       (map :node)
-       distinct))
-
-(defn vnodes-for-node [vnodes node]
-  (->> (for [vnode (range vnodes)]
-         [(consistent-long-hash (node-prefix node vnode))
-          {:node node :vnode vnode}])
-       (into {})))
+(def ring-ranges (range Long/MIN_VALUE Long/MAX_VALUE
+                        (inc (quot Long/MAX_VALUE (quot (long *partitions*) 2)))))
 
 (defn create-hash-ring [servers]
-  (let [partitions-per-node (long (/ ^long *partitions* (count servers)))]
-    (->> servers
-         (map (partial vnodes-for-node partitions-per-node))
-         (apply merge (sorted-map)))))
+  (->> servers
+       (sort-by :ip)
+       cycle
+       (map vector ring-ranges)
+       (into (sorted-map))))
 
 (defn join-hash-ring [hash-ring node]
-  (create-hash-ring (cons node (nodes-in-hash-ring hash-ring))))
+  (->> hash-ring
+       vals
+       (conj node)
+       create-hash-ring))
 
 (defn depart-hash-ring [hash-ring node]
-  (create-hash-ring (remove #{node} (nodes-in-hash-ring hash-ring))))
+  (->> hash-ring
+       vals
+       (disj node)
+       create-hash-ring))
 
 (defn nodes-for-key [hash-ring replicas k]
   (->> (concat (subseq hash-ring > (consistent-long-hash k))
                (cycle hash-ring))
-       (take replicas)
-       (map val)))
+       (map val)
+       (take replicas)))
 
 (comment
 
@@ -258,5 +256,7 @@
   (let [replicas 3
         hash-ring (create-hash-ring [{:ip (str (ip) "-1") :port "5555"}
                                      {:ip (str (ip) "-2") :port "5555"}
-                                     {:ip (str (ip) "-3") :port "5555"}])]
+                                     {:ip (str (ip) "-3") :port "5555"}
+                                     {:ip (str (ip) "-4") :port "5555"}
+                                     {:ip (str (ip) "-5") :port "5555"}])]
     (nodes-for-key hash-ring replicas "foo")))
