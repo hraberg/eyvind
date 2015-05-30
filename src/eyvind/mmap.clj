@@ -42,9 +42,9 @@
 
 (defn mmap-file
   ([file ^long length]
+   (-> file io/file io/make-parents)
    (mmap-file file (RandomAccessFile. (io/file file) "rw") length))
   ([file ^RandomAccessFile backing-file ^long length]
-   (-> file io/file io/make-parents)
    (mmap (->MappedFile file -1 backing-file) length)))
 
 (defn unmap [{:keys [address ^RandomAccessFile backing-file] :as mapped-file}]
