@@ -195,6 +195,17 @@
 ;;       This is a total stab in the dark, picks 64 partitions based on most significant bits.
 ;;       http://www.johnchukwuma.com/training/Riak%20Handbook.pdf
 ;;       I think there needs to be a mix between this and the modulo approach.
+
+;; Central to any Riak cluster is a 160-bit integer space (often
+;; referred to as "the ring") which is divided into equally-sized
+;; partitions.
+
+;; Physical servers, referred to in the cluster as "nodes", run a
+;; certain number of virtual nodes, or "vnodes". Each vnode will claim
+;; a partition on the ring. The number of active vnodes is determined
+;; by the number of partitions into which the ring has been split, a
+;; static number chosen at cluster initialisation.
+
 (def ^:dynamic *partitions* 64)
 
 (defn join-hash-ring [vnodes hash-ring node]
