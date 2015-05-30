@@ -160,10 +160,12 @@
 
 ;; Consistent Hashing
 
-(defn sha1 [x]
-  (->> (doto (MessageDigest/getInstance "SHA-1")
-         (.update (-> x str (.getBytes "UTF-8"))))
-       .digest
+(defn message-digest ^MessageDigest []
+  (MessageDigest/getInstance "SHA-1"))
+
+(defn consistent-hash ^BigInteger [x]
+  (->> (-> x str (.getBytes "UTF-8"))
+       (.digest (message-digest))
        (BigInteger. 1)))
 
 (defn biginteger->hex [^BigInteger x]
@@ -189,18 +191,27 @@
 (defn node-prefix [{:keys [ip] :as node} vnode]
   (str "node-" (:ip node) "/vnode-" vnode))
 
-;; TODO: Figure out parititioning of keys (modulo?) as in the Riak explaination.
+;; TODO: Figure out parititioning of keys as in the Riak explaination.
+;;       This is a total stab in the dark, picks 64 partitions based on most significant bits.
+(def partitions 64)
+(def key-shift (- (* 8 (.getDigestLength (message-digest)))
+                  (.bitCount (biginteger (dec ^long partitions)))))
+
+(defn partition-hash [x]
+  (.shiftRight (consistent-hash x) key-shift))
+
 (defn join-hash-ring [vnodes hash-ring node]
   (->> (for [vnode (range vnodes)
              :let [prefix (node-prefix node vnode)]]
-         [(sha1 prefix) (merge {:node node :vnode vnode}
-                               (when (:local? node)
-                                 {:log (init-store (str prefix ".log"))}))])
+         [(partition-hash prefix)
+          (merge {:node node :vnode vnode}
+                 (when (:local? node)
+                   {:log (init-store (str prefix ".log"))}))])
        (into hash-ring)))
 
 (defn depart-hash-ring [vnodes hash-ring node]
   (->> (range vnodes)
-       (map (comp sha1 (partial node-prefix node)))
+       (map (comp partition-hash (partial node-prefix node)))
        (reduce dissoc hash-ring)))
 
 (defn create-hash-ring [servers vnodes]
@@ -209,7 +220,7 @@
 (defn nodes-for-key [hash-ring replicas k]
   (->> (concat (->> hash-ring
                     keys
-                    (drop-while (partial < (sha1 k))))
+                    (drop-while (partial < (partition-hash k))))
                (->> hash-ring
                     keys
                     cycle))
