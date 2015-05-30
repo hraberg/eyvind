@@ -81,10 +81,13 @@
 
 (def tombstone-size -1)
 
-(defn remove-entry [bc ^String k]
-  (let [key-bytes (str-bytes k)
-        ts (System/currentTimeMillis)]
-    (write-entry bc (header ts (count key-bytes) tombstone-size) key-bytes (byte-array 0))))
+(defn remove-entry
+  ([bc ^String k]
+   (remove-entry bc (System/currentTimeMillis) k))
+  ([bc ^long ts ^String k]
+    (let [key-bytes (str-bytes k)
+          header-bytes (header ts (count key-bytes) tombstone-size)]
+      (write-entry bc header-bytes key-bytes (byte-array 0)))))
 
 (defn scan-log [^DiskStore bc]
   (let [log (.log bc)
@@ -111,8 +114,8 @@
                        (dissoc keydir k)
                        (assoc keydir k (->KeydirEntry ts value-size value-offset)))))))))))
 
-(defn hint-file ^String [{:keys [log]}]
-  (str (:file log) ".hint"))
+(defn hint-file ^String [^DiskStore bc]
+  (str (.file ^MappedFile (.log bc)) ".hint"))
 
 (defn write-hint-file [^DiskStore bc]
   (with-open [out (RandomAccessFile. (hint-file bc) "rw")]
