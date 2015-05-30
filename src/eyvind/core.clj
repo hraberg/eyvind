@@ -214,6 +214,7 @@
 
 ;; OK, so this may work, split ring in partitions, each node picks partitions / servers virtual nodes.
 ;; Replicas goes to n next partitions and hence nodes. How to keep partitions stable?
+;; The virtual nodes are the partitions.
 
 (def ^:dynamic *partitions* 64)
 
