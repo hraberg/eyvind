@@ -183,9 +183,47 @@
        (remove (partial re-find #"^127\."))
        first))
 
+(defn node-address [ip port]
+  (str "tcp://" ip ":" port))
+
+(defn node-prefix [{:keys [ip] :as node} vnode]
+  (str "node-" (:ip node) "/vnode-" vnode))
+
+(defn join-hash-ring [vnodes hash-ring node]
+  (->> (for [vnode (range vnodes)
+             :let [prefix (node-prefix node vnode)]]
+         [(sha1 prefix) (merge {:node node :vnode vnode}
+                               (when (:local? node)
+                                 {:log (init-store (str prefix ".log"))}))])
+       (into hash-ring)))
+
+(defn depart-hash-ring [vnodes hash-ring node]
+  (->> (range vnodes)
+       (map (comp sha1 (partial node-prefix node)))
+       (reduce dissoc hash-ring)))
+
+(defn create-hash-ring [servers vnodes]
+  (reduce (partial join-hash-ring vnodes) (sorted-map) servers))
+
+(defn nodes-for-key [hash-ring replicas k]
+  (->> (concat (->> hash-ring
+                    keys
+                    (drop-while (partial < (sha1 k))))
+               (->> hash-ring
+                    keys
+                    cycle))
+       (take replicas)
+       (map hash-ring)))
+
 (comment
 
   (def bc (atom (init-store "test.log")))
 
   (swap! bc put-entry "foo" (.getBytes "bar" "UTF-8"))
-  (String. (get-entry @bc "foo") "UTF-8"))
+  (String. (get-entry @bc "foo") "UTF-8")
+
+  (let [vnodes 3
+        replicas 3
+        hash-ring (create-hash-ring [{:ip (ip) :port "5555" :local? true}] vnodes)]
+    (nodes-for-key hash-ring replicas "foo"))
+)
