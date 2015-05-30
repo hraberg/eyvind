@@ -228,14 +228,10 @@
             (sorted-map) servers)))
 
 (defn nodes-for-key [hash-ring replicas k]
-  (->> (concat (->> hash-ring
-                    keys
-                    (drop-while (partial < (consistent-hash k))))
-               (->> hash-ring
-                    keys
-                    cycle))
+  (->> (concat (subseq hash-ring > (consistent-hash k))
+               (cycle hash-ring))
        (take replicas)
-       (map hash-ring)))
+       (map val)))
 
 (comment
 
