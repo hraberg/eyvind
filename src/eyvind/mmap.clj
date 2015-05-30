@@ -27,7 +27,7 @@
 
 (declare unmap)
 
-(defrecord MappedFile [^String file ^long length ^long address ^RandomAccessFile backing-file]
+(defrecord MappedFile [^String file ^long address ^RandomAccessFile backing-file]
   Closeable
   (close [this]
     (.close backing-file)
@@ -41,14 +41,21 @@
          backing-file (doto backing-file
                         (.setLength length))
          channel (.getChannel backing-file)]
-     (->MappedFile file length (.invoke mmap-c channel (object-array [(int 1) 0 length])) backing-file))))
+     (->MappedFile file (.invoke mmap-c channel (object-array [(int 1) 0 length])) backing-file))))
 
-(defn unmap [{:keys [length address ^RandomAccessFile backing-file]}]
-  (.invoke unmap-c nil (object-array [address length])))
+(defn unmap [{:keys [address ^RandomAccessFile backing-file]}]
+  (.invoke unmap-c nil (object-array [address (.length backing-file)])))
 
 (defn remap [{:keys [file backing-file] :as mapped-file} ^long new-length]
   (unmap mapped-file)
   (mmap file backing-file new-length))
+
+(defn ensure-capacity [^MappedFile log ^long growth-factor ^long needed]
+  (let [backing-file ^RandomAccessFile (.backing-file log)
+        length (.length backing-file)
+        offset (.getFilePointer backing-file)]
+    (cond-> log
+      (> (+ offset needed) length) (remap (* growth-factor length)))))
 
 (defn get-int ^long [^MappedFile mapped-file ^long pos]
   (.getInt unsafe (+ pos (.address mapped-file))))

@@ -16,7 +16,7 @@
   ([file]
    (open-log file (* 8 1024) {}))
   ([file length opts]
-   (-> (merge {:offset 0 :keydir {} :growth-factor 2 :sync? false} opts)
+   (-> (merge {:offset 0 :keydir {} :sync? false :growth-factor 2} opts)
        (assoc :log (mmap/mmap file length)))))
 
 (defrecord KeydirEntry [^long ts ^long value-size ^long value-offset])
@@ -44,11 +44,6 @@
                (.update key-bytes)
                (.update value-bytes))))
 
-(defn maybe-grow-log [{:keys [^eyvind.mmap.MappedFile log ^long offset ^long growth-factor] :as bc} ^long needed]
-  (let [length (.length log)]
-    (cond-> bc
-      (> (+ offset needed) length) (update-in [:log] mmap/remap (* growth-factor length)))))
-
 ;; split this into put-entry and write-entry, the latter reused by remove-entry.
 (defn put-entry
   ([bc ^String k ^bytes v]
@@ -56,10 +51,11 @@
   ([bc ^long ts ^String k ^bytes v]
    (let [key-bytes (str-bytes k)]
      (put-entry bc ts (header ts (count key-bytes) (count v)) k key-bytes v)))
-  ([bc ts ^bytes header-bytes k ^bytes key-bytes ^bytes v]
+  ([{:keys [^long growth-factor] :as bc} ts ^bytes header-bytes k ^bytes key-bytes ^bytes v]
    (let [crc-bytes (long-bytes (entry-crc header-bytes key-bytes v))
          entry-size (+ (count crc-bytes) (count header-bytes) (count key-bytes) (count v))
-         {:keys [^eyvind.mmap.MappedFile log ^long offset sync?] :as bc} (maybe-grow-log bc entry-size)
+         {:keys [^eyvind.mmap.MappedFile log ^long offset sync?] :as bc} (update-in bc [:log]
+                                                                                    mmap/ensure-capacity growth-factor entry-size)
          value-offset (+ offset (- entry-size (count v)))]
      (doto ^RandomAccessFile (.backing-file log)
        (.write ^bytes crc-bytes)
