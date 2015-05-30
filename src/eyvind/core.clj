@@ -16,7 +16,7 @@
   ([file]
    (open-log file (* 8 1024) {}))
   ([file length opts]
-   (-> (merge {:offset 0 :keydir {} :sync? false :growth-factor 2} opts)
+   (-> (merge {:keydir {} :sync? false :growth-factor 2} opts)
        (assoc :log (mmap/mmap file length)))))
 
 (defrecord KeydirEntry [^long ts ^long value-size ^long value-offset])
@@ -63,9 +63,7 @@
        (.write key-bytes)
        (.write v)
        (cond-> sync? (-> .getFD .sync)))
-     (-> bc
-         (update-in [:offset] + entry-size)
-         (update-in [:keydir] assoc k (->KeydirEntry ts (count v) value-offset))))))
+     (update-in bc [:keydir] assoc k (->KeydirEntry ts (count v) value-offset)))))
 
 (defn get-entry [{:keys [log keydir]} k]
   (when-let [^KeydirEntry entry (get keydir k)]
@@ -80,28 +78,29 @@
         (put-entry ts (header ts (count key-bytes) tombstone-size) k key-bytes (byte-array 0))
         (update-in [:keydir] dissoc k))))
 
-(defn scan-log [{:keys [^eyvind.mmap.MappedFile log keydir ^long offset] :as bc}]
-  (loop [offset offset keydir keydir]
-    (let [crc (mmap/get-long log offset)]
-      (if (zero? crc)
-        (do (.seek ^RandomAccessFile (.backing-file log) offset)
-            (assoc bc :keydir keydir :offset offset))
-        (let [ts (mmap/get-long log (+ 8 offset))
-              key-size (mmap/get-short log (+ 16 offset))
-              value-size (mmap/get-int log (+ 18 offset))
-              tombstone? (= tombstone-size value-size)
-              value-size (max value-size 0)
-              entry-size (+ 14 key-size value-size)]
-          (when-not (= crc (mmap/crc-checksum log (+ 8 offset) entry-size))
-            (throw (IllegalStateException. (str "CRC check failed at offset: " offset))))
-          (let [key-offset (+ 22 offset)
-                key-bytes (mmap/get-bytes log key-offset (byte-array key-size))
-                k (String. ^bytes key-bytes "UTF-8")
-                value-offset (+ key-offset key-size)]
-            (recur (+ value-offset value-size)
-                   (if tombstone?
-                     (dissoc keydir k)
-                     (assoc keydir k (->KeydirEntry ts value-size value-offset))))))))))
+(defn scan-log [{:keys [^eyvind.mmap.MappedFile log keydir] :as bc}]
+  (let [backing-file ^RandomAccessFile (.backing-file log)]
+    (loop [offset (.getFilePointer backing-file) keydir keydir]
+      (let [crc (mmap/get-long log offset)]
+        (if (zero? crc)
+          (do (.seek backing-file offset)
+              (assoc bc :keydir keydir))
+          (let [ts (mmap/get-long log (+ 8 offset))
+                key-size (mmap/get-short log (+ 16 offset))
+                value-size (mmap/get-int log (+ 18 offset))
+                tombstone? (= tombstone-size value-size)
+                value-size (max value-size 0)
+                entry-size (+ 14 key-size value-size)]
+            (when-not (= crc (mmap/crc-checksum log (+ 8 offset) entry-size))
+              (throw (IllegalStateException. (str "CRC check failed at offset: " offset))))
+            (let [key-offset (+ 22 offset)
+                  key-bytes (mmap/get-bytes log key-offset (byte-array key-size))
+                  k (String. ^bytes key-bytes "UTF-8")
+                  value-offset (+ key-offset key-size)]
+              (recur (+ value-offset value-size)
+                     (if tombstone?
+                       (dissoc keydir k)
+                       (assoc keydir k (->KeydirEntry ts value-size value-offset)))))))))))
 
 (defn hint-file ^String [{:keys [log]}]
   (str (:file log) ".hint"))
@@ -117,13 +116,14 @@
         (.writeLong (.value-offset v))
         (.write key-bytes)))))
 
-(defn read-hint-file [{:keys [log keydir] :as bc}]
+(defn read-hint-file [{:keys [^eyvind.mmap.MappedFile log keydir] :as bc}]
   (let [hints (io/file (hint-file bc))]
     (if (.exists hints)
       (with-open [in (RandomAccessFile. hints "r")]
         (loop [offset 0 keydir keydir]
           (if (= (.getFilePointer in) (.length in))
-            (assoc bc :keydir keydir :offset offset)
+            (do (.seek ^RandomAccessFile (.backing-file log) offset)
+                (assoc bc :keydir keydir))
             (let [ts (.readLong in)
                   key-size (.readShort in)
                   value-size (.readInt in)
