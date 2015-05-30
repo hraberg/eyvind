@@ -46,12 +46,16 @@
                (.update key-bytes)
                (.update value-bytes))))
 
+(defn log-file ^RandomAccessFile [^DiskStore bc]
+  (.backing-file ^MappedFile (.log bc)))
+
 (defn write-entry
-  [{:keys [^long growth-factor sync?] :as bc} ^bytes header-bytes ^bytes key-bytes ^bytes v]
+  [^DiskStore bc ^bytes header-bytes ^bytes key-bytes ^bytes v]
   (let [crc-bytes (long-bytes (entry-crc header-bytes key-bytes v))
         entry-size (+ (count crc-bytes) (count header-bytes) (count key-bytes) (count v))
-        {:keys [^MappedFile log] :as bc} (update-in bc [:log] mmap/ensure-capacity growth-factor entry-size)]
-    (doto ^RandomAccessFile (.backing-file log)
+        sync? (.sync? bc)
+        bc (update-in bc [:log] mmap/ensure-capacity (.growth-factor bc) entry-size)]
+    (doto (log-file bc)
       (.write ^bytes crc-bytes)
       (.write header-bytes)
       (.write key-bytes)
@@ -62,18 +66,18 @@
 (defn put-entry
   ([bc ^String k ^bytes v]
    (put-entry bc (System/currentTimeMillis) k v))
-  ([{:keys [^MappedFile log] :as bc} ^long ts ^String k ^bytes v]
+  ([bc ^long ts ^String k ^bytes v]
    (let [key-bytes (str-bytes k)
          header-bytes (header ts (count key-bytes) (count v))
-         offset (.getFilePointer ^RandomAccessFile (.backing-file log))
+         offset (-> bc log-file .getFilePointer)
          value-offset (+ offset 8 (count header-bytes) (count key-bytes))]
      (-> bc
          (write-entry header-bytes key-bytes v)
          (update-in [:keydir] assoc k (->KeydirEntry ts (count v) value-offset))))))
 
-(defn get-entry [{:keys [log keydir]} k]
-  (when-let [^KeydirEntry entry (get keydir k)]
-    (mmap/get-bytes log (.value-offset entry) (byte-array (.value-size entry)))))
+(defn get-entry [^DiskStore bc k]
+  (when-let [^KeydirEntry entry (get (.keydir bc) k)]
+    (mmap/get-bytes (.log bc) (.value-offset entry) (byte-array (.value-size entry)))))
 
 (def tombstone-size -1)
 
@@ -82,9 +86,10 @@
         ts (System/currentTimeMillis)]
     (write-entry bc (header ts (count key-bytes) tombstone-size) key-bytes (byte-array 0))))
 
-(defn scan-log [{:keys [^MappedFile log keydir] :as bc}]
-  (let [backing-file ^RandomAccessFile (.backing-file log)]
-    (loop [offset (.getFilePointer backing-file) keydir keydir]
+(defn scan-log [^DiskStore bc]
+  (let [log (.log bc)
+        backing-file (log-file bc)]
+    (loop [offset (.getFilePointer backing-file) keydir (.keydir bc)]
       (let [crc (mmap/get-long log offset)]
         (if (or (zero? crc) (= offset (.length backing-file)))
           (do (.seek backing-file offset)
@@ -109,9 +114,9 @@
 (defn hint-file ^String [{:keys [log]}]
   (str (:file log) ".hint"))
 
-(defn write-hint-file [{:keys [keydir] :as bc}]
+(defn write-hint-file [^DiskStore bc]
   (with-open [out (RandomAccessFile. (hint-file bc) "rw")]
-    (doseq [[^String k ^KeydirEntry v] keydir
+    (doseq [[^String k ^KeydirEntry v] (.keydir bc)
             :let [key-bytes (str-bytes k)]]
       (doto out
         (.writeLong (.ts v))
@@ -121,13 +126,13 @@
         (.write key-bytes)))
     bc))
 
-(defn read-hint-file [{:keys [^MappedFile log keydir] :as bc}]
+(defn read-hint-file [^DiskStore bc]
   (let [hints (io/file (hint-file bc))]
     (if (.exists hints)
       (with-open [in (RandomAccessFile. hints "r")]
-        (loop [offset 0 keydir keydir]
+        (loop [offset 0 keydir (.keydir bc)]
           (if (= (.getFilePointer in) (.length in))
-            (do (.seek ^RandomAccessFile (.backing-file log) offset)
+            (do (-> bc log-file (.seek offset))
                 (assoc bc :keydir keydir))
             (let [ts (.readLong in)
                   key-size (.readShort in)
