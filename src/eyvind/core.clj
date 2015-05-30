@@ -18,8 +18,9 @@
 
 (defn open-log
   ([file]
-   (open-log file (* 8 1024) {}))
-  ([file length {:keys [sync? growth-factor] :or {sync? false growth-factor 2}}]
+   (open-log file {}))
+  ([file {:keys [sync? growth-factor length]
+          :or {sync? false growth-factor 2 length (* 8 1024)}}]
    (->DiskStore {} sync? growth-factor (mmap/mmap-file file length))))
 
 (defn header ^bytes [^long ts ^long key-size ^long value-size]
