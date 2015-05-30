@@ -168,6 +168,12 @@
        (.digest (message-digest))
        (BigInteger. 1)))
 
+(defn consistent-long-hash ^long [x]
+  (-> (ByteBuffer/wrap
+       (.digest (message-digest) (-> x str (.getBytes "UTF-8"))))
+      (.order (ByteOrder/nativeOrder))
+      .getLong))
+
 (defn biginteger->hex [^BigInteger x]
   (format "%040x" x))
 
