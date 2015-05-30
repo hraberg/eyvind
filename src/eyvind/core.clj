@@ -193,34 +193,33 @@
 
 ;; TODO: Figure out parititioning of keys as in the Riak explaination.
 ;;       This is a total stab in the dark, picks 64 partitions based on most significant bits.
-(def partitions 64)
-(def key-shift (- (* 8 (.getDigestLength (message-digest)))
-                  (.bitCount (biginteger (dec ^long partitions)))))
-
-(defn partition-hash [x]
-  (.shiftRight (consistent-hash x) key-shift))
+;;       http://www.johnchukwuma.com/training/Riak%20Handbook.pdf
+;;       I think there needs to be a mix between this and the modulo approach.
+(def ^:dynamic *partitions* 64)
 
 (defn join-hash-ring [vnodes hash-ring node]
-  (->> (for [vnode (range vnodes)
-             :let [prefix (node-prefix node vnode)]]
-         [(partition-hash prefix)
-          (merge {:node node :vnode vnode}
-                 (when (:local? node)
-                   {:log (init-store (str prefix ".log"))}))])
-       (into hash-ring)))
+  (let [log (when (:local? node)
+              {:log (init-store (str "node-" (:ip node) ".log"))})]
+    (->> (for [vnode (range vnodes)
+               :let [prefix (node-prefix node vnode)]]
+           [(consistent-hash prefix)
+            (merge {:node node :vnode vnode} log)])
+         (into hash-ring))))
 
-(defn depart-hash-ring [vnodes hash-ring node]
-  (->> (range vnodes)
-       (map (comp partition-hash (partial node-prefix node)))
+(defn depart-hash-ring [hash-ring node]
+  (->> (range *partitions*)
+       (map (comp consistent-hash (partial node-prefix node)))
        (reduce dissoc hash-ring)))
 
-(defn create-hash-ring [servers vnodes]
-  (reduce (partial join-hash-ring vnodes) (sorted-map) servers))
+(defn create-hash-ring [servers]
+  (let [partitions-per-node (long (/ ^long *partitions* (count servers)))]
+    (reduce (partial join-hash-ring partitions-per-node)
+            (sorted-map) servers)))
 
 (defn nodes-for-key [hash-ring replicas k]
   (->> (concat (->> hash-ring
                     keys
-                    (drop-while (partial < (partition-hash k))))
+                    (drop-while (partial < (consistent-hash k))))
                (->> hash-ring
                     keys
                     cycle))
@@ -236,6 +235,6 @@
 
   (let [vnodes 3
         replicas 3
-        hash-ring (create-hash-ring [{:ip (ip) :port "5555" :local? true}] vnodes)]
-    (nodes-for-key hash-ring replicas "foo"))
-)
+        hash-ring (create-hash-ring [{:ip (ip) :port "5555" :local? true}
+                                     {:ip (ip) :port "5555"}])]
+    (nodes-for-key hash-ring replicas "foo")))
