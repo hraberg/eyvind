@@ -212,6 +212,9 @@
 ;; by the number of partitions into which the ring has been split, a
 ;; static number chosen at cluster initialisation.
 
+;; OK, so this may work, split ring in partitions, each node picks partitions / servers virtual nodes.
+;; Replicas goes to n next partitions and hence nodes. How to keep partitions stable?
+
 (def ^:dynamic *partitions* 64)
 
 (defn nodes-in-hash-ring [hash-ring]
