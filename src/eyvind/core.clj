@@ -2,6 +2,7 @@
   (:require [eyvind.mmap :as mmap]
             [clojure.java.io :as io])
   (:import
+   [eyvind.mmap MappedFile]
    [java.io RandomAccessFile]
    [java.net InetAddress NetworkInterface]
    [java.nio ByteBuffer ByteOrder]
@@ -44,26 +45,30 @@
                (.update key-bytes)
                (.update value-bytes))))
 
-;; split this into put-entry and write-entry, the latter reused by remove-entry.
+(defn write-entry
+  [{:keys [^long growth-factor sync?] :as bc} ^bytes header-bytes ^bytes key-bytes ^bytes v]
+  (let [crc-bytes (long-bytes (entry-crc header-bytes key-bytes v))
+        entry-size (+ (count crc-bytes) (count header-bytes) (count key-bytes) (count v))
+        {:keys [^MappedFile log] :as bc} (update-in bc [:log] mmap/ensure-capacity growth-factor entry-size)]
+    (doto ^RandomAccessFile (.backing-file log)
+      (.write ^bytes crc-bytes)
+      (.write header-bytes)
+      (.write key-bytes)
+      (.write v)
+      (cond-> sync? (-> .getFD .sync)))
+    bc))
+
 (defn put-entry
   ([bc ^String k ^bytes v]
    (put-entry bc (System/currentTimeMillis) k v))
-  ([bc ^long ts ^String k ^bytes v]
-   (let [key-bytes (str-bytes k)]
-     (put-entry bc ts (header ts (count key-bytes) (count v)) k key-bytes v)))
-  ([{:keys [^eyvind.mmap.MappedFile log ^long growth-factor sync?] :as bc} ts ^bytes header-bytes k ^bytes key-bytes ^bytes v]
-   (let [crc-bytes (long-bytes (entry-crc header-bytes key-bytes v))
-         entry-size (+ (count crc-bytes) (count header-bytes) (count key-bytes) (count v))
-         backing-file  ^RandomAccessFile (.backing-file log)
-         value-offset (+ (.getFilePointer backing-file) (- entry-size (count v)))
-         bc (update-in bc [:log] mmap/ensure-capacity growth-factor entry-size)]
-     (doto backing-file
-       (.write ^bytes crc-bytes)
-       (.write header-bytes)
-       (.write key-bytes)
-       (.write v)
-       (cond-> sync? (-> .getFD .sync)))
-     (update-in bc [:keydir] assoc k (->KeydirEntry ts (count v) value-offset)))))
+  ([{:keys [^MappedFile log] :as bc} ^long ts ^String k ^bytes v]
+   (let [key-bytes (str-bytes k)
+         header-bytes (header ts (count key-bytes) (count v))
+         offset (.getFilePointer ^RandomAccessFile (.backing-file log))
+         value-offset (+ offset 8 (count header-bytes) (count key-bytes))]
+     (-> bc
+         (write-entry header-bytes key-bytes v)
+         (update-in [:keydir] assoc k (->KeydirEntry ts (count v) value-offset))))))
 
 (defn get-entry [{:keys [log keydir]} k]
   (when-let [^KeydirEntry entry (get keydir k)]
@@ -74,11 +79,9 @@
 (defn remove-entry [bc ^String k]
   (let [key-bytes (str-bytes k)
         ts (System/currentTimeMillis)]
-    (-> bc
-        (put-entry ts (header ts (count key-bytes) tombstone-size) k key-bytes (byte-array 0))
-        (update-in [:keydir] dissoc k))))
+    (write-entry bc (header ts (count key-bytes) tombstone-size) key-bytes (byte-array 0))))
 
-(defn scan-log [{:keys [^eyvind.mmap.MappedFile log keydir] :as bc}]
+(defn scan-log [{:keys [^MappedFile log keydir] :as bc}]
   (let [backing-file ^RandomAccessFile (.backing-file log)]
     (loop [offset (.getFilePointer backing-file) keydir keydir]
       (let [crc (mmap/get-long log offset)]
@@ -114,9 +117,10 @@
         (.writeShort (count key-bytes))
         (.writeInt (.value-size v))
         (.writeLong (.value-offset v))
-        (.write key-bytes)))))
+        (.write key-bytes)))
+    bc))
 
-(defn read-hint-file [{:keys [^eyvind.mmap.MappedFile log keydir] :as bc}]
+(defn read-hint-file [{:keys [^MappedFile log keydir] :as bc}]
   (let [hints (io/file (hint-file bc))]
     (if (.exists hints)
       (with-open [in (RandomAccessFile. hints "r")]
