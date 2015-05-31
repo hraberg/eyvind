@@ -1,6 +1,7 @@
 (ns eyvind.core
-  (:require [eyvind.mmap :as mmap]
-            [clojure.java.io :as io])
+  (:require [clojure.java.io :as io]
+            [eyvind.mmap :as mmap]
+            [zeromq.zmq :as zmq])
   (:import
    [eyvind.mmap MappedFile]
    [java.io RandomAccessFile]
@@ -268,6 +269,27 @@
 (defn node-by-idx [hash-ring idx]
   (nth (vals hash-ring) idx))
 
+;; ZeroMQ
+
+(defn zmq-server [context]
+  (future
+    (with-open [socket (-> (zmq/socket context :rep)
+                           (zmq/bind "tcp://*:5555"))]
+      (while (not (.isInterrupted (Thread/currentThread)))
+        (println "Received " (zmq/receive-str socket))
+        (zmq/send-str socket "World")))))
+
+(defn zmq-client [context]
+  (future
+    (println "Connecting to hello world server...")
+    (with-open [socket (-> (zmq/socket context :req)
+                           (zmq/connect "tcp://127.0.0.1:5555"))]
+      (dotimes [i 10]
+        (let [request "Hello"]
+          (println "Sending " request i "...")
+          (zmq/send-str socket request)
+          (println "Received " (zmq/receive-str socket) i))))))
+
 (comment
 
   (def bc (atom (init-store "test.log")))
@@ -282,4 +304,8 @@
                                      {:ip (str (ip) "-5") :port "5555"}])]
     (println (nodes-for-key hash-ring "foo"))
     (println (nodes-for-key (depart-hash-ring hash-ring {:ip (str (ip) "-5") :port "5555"}) "foo"))
-    (println (partitions-for-node hash-ring {:ip (str (ip) "-2") :port "5555"}))))
+    (println (partitions-for-node hash-ring {:ip (str (ip) "-2") :port "5555"})))
+
+  (with-open [context (zmq/context)]
+    (zmq-server context)
+    @(zmq-client context)))
