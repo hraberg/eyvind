@@ -163,16 +163,16 @@
 (defn message-digest ^MessageDigest []
   (MessageDigest/getInstance "SHA-1"))
 
+(defn max-digest ^double []
+  (Math/pow 2 (* 8 (.getDigestLength (message-digest)))))
+
 (defn consistent-hash ^BigInteger [x]
   (->> (-> x str (.getBytes "UTF-8"))
        (.digest (message-digest))
        (BigInteger. 1)))
 
-(defn consistent-long-hash ^long [x]
-  (-> (ByteBuffer/wrap
-       (.digest (message-digest) (-> x str (.getBytes "UTF-8"))))
-      (.order (ByteOrder/nativeOrder))
-      .getLong))
+(defn consistent-double-hash ^double [x]
+  (.doubleValue (consistent-hash x)))
 
 (defn biginteger->hex [^BigInteger x]
   (format "%040x" x))
@@ -217,34 +217,56 @@
 ;; The virtual nodes are the partitions.
 
 (def ^:dynamic *partitions* 64)
+(def ^:dynamic *replicas* 3)
 
-(def ring-ranges (range Long/MIN_VALUE Long/MAX_VALUE
-                        (inc (quot Long/MAX_VALUE (quot (long *partitions*) 2)))))
+(defn ring-ranges [^long partitions]
+  (->> partitions
+       (quot (max-digest))
+       (range 0.0 (max-digest))
+       vec))
 
-(defn create-hash-ring [servers]
-  (->> servers
-       (sort-by :ip)
-       cycle
-       (map vector ring-ranges)
-       (into (sorted-map))))
+(defn create-hash-ring
+  ([nodes]
+   (create-hash-ring nodes *partitions*))
+  ([nodes partitions ]
+   (->> nodes
+        (sort-by :ip)
+        cycle
+        (map vector (ring-ranges partitions))
+        (into (sorted-map)))))
 
 (defn join-hash-ring [hash-ring node]
-  (->> hash-ring
-       vals
-       (conj node)
-       create-hash-ring))
+  (-> hash-ring
+      vals
+      set
+      (conj node)
+      (create-hash-ring (count hash-ring))))
 
 (defn depart-hash-ring [hash-ring node]
+  (-> hash-ring
+      vals
+      set
+      (disj node)
+      (create-hash-ring (count hash-ring))))
+
+(defn nodes-for-key
+  ([hash-ring k]
+   (nodes-for-key hash-ring *replicas* k))
+  ([hash-ring replicas k]
+   (->> (concat (subseq hash-ring > (consistent-double-hash k))
+                (cycle hash-ring))
+         (map val)
+         (take replicas))))
+
+(defn partitions-for-node [hash-ring node]
   (->> hash-ring
        vals
-       (disj node)
-       create-hash-ring))
+       (map-indexed vector)
+       (filter (comp #{node} second))
+       (map first)))
 
-(defn nodes-for-key [hash-ring replicas k]
-  (->> (concat (subseq hash-ring > (consistent-long-hash k))
-               (cycle hash-ring))
-       (map val)
-       (take replicas)))
+(defn node-by-idx [hash-ring idx]
+  (nth (vals hash-ring) idx))
 
 (comment
 
@@ -253,10 +275,11 @@
   (swap! bc put-entry "foo" (.getBytes "bar" "UTF-8"))
   (String. (get-entry @bc "foo") "UTF-8")
 
-  (let [replicas 3
-        hash-ring (create-hash-ring [{:ip (str (ip) "-1") :port "5555"}
+  (let [hash-ring (create-hash-ring [{:ip (str (ip) "-1") :port "5555"}
                                      {:ip (str (ip) "-2") :port "5555"}
                                      {:ip (str (ip) "-3") :port "5555"}
                                      {:ip (str (ip) "-4") :port "5555"}
                                      {:ip (str (ip) "-5") :port "5555"}])]
-    (nodes-for-key hash-ring replicas "foo")))
+    (println (nodes-for-key hash-ring "foo"))
+    (println (nodes-for-key (depart-hash-ring hash-ring {:ip (str (ip) "-5") :port "5555"}) "foo"))
+    (println (partitions-for-node hash-ring {:ip (str (ip) "-2") :port "5555"}))))
