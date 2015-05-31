@@ -217,6 +217,9 @@
 ;; Replicas goes to n next partitions and hence nodes. How to keep partitions stable?
 ;; The virtual nodes are the partitions.
 
+;; This slide deck shows examples of vnodes being re-assigned, but don't explain how really:
+;; http://johnleach.co.uk/downloads/slides/riak-consistent-hashing.pdf
+
 (def ^:dynamic *partitions* 64)
 (def ^:dynamic *replicas* 3)
 
