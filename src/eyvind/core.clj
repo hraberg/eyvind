@@ -220,15 +220,18 @@
 (def ^:dynamic *partitions* 64)
 (def ^:dynamic *replicas* 3)
 
+(defn partition-size ^double [^long partitions]
+  (quot (max-digest) partitions))
+
 (defn ring-ranges [^long partitions]
   (->> partitions
-       (quot (max-digest))
+       partition-size
        (range 0.0 (max-digest))
        vec))
 
-(defn partition-for-key [^long partitions k]
+(defn partition-for-key ^long [^long partitions k]
   (long (mod (inc (quot (consistent-double-hash k)
-                        (quot (max-digest) partitions)))
+                        (partition-size partitions)))
              partitions)))
 
 (defn create-hash-ring
@@ -261,8 +264,8 @@
   ([hash-ring replicas k]
    (->> (concat (subseq hash-ring > (consistent-double-hash k))
                 (cycle hash-ring))
-         (map val)
-         (take replicas))))
+        (map val)
+        (take replicas))))
 
 (defn partitions-for-node [hash-ring node]
   (->> hash-ring
