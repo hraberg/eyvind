@@ -266,7 +266,7 @@
   ([hash-ring k]
    (nodes-for-key hash-ring *replicas* k))
   ([hash-ring replicas k]
-   (->> (concat (subseq hash-ring > (consistent-double-hash k))
+   (->> (concat (subseq hash-ring >= (consistent-double-hash k))
                 (cycle hash-ring))
         (map val)
         (take replicas))))
