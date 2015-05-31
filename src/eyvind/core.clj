@@ -226,6 +226,11 @@
        (range 0.0 (max-digest))
        vec))
 
+(defn partition-for-key [^long partitions k]
+  (long (mod (inc (quot (consistent-double-hash k)
+                        (quot (max-digest) partitions)))
+             partitions)))
+
 (defn create-hash-ring
   ([nodes]
    (create-hash-ring nodes *partitions*))
@@ -303,6 +308,7 @@
                                      {:ip (str (ip) "-4") :port "5555"}
                                      {:ip (str (ip) "-5") :port "5555"}])]
     (println (nodes-for-key hash-ring "foo"))
+    (println (consistent-double-hash "foo") (partition-for-key *partitions* "foo"))
     (println (nodes-for-key (depart-hash-ring hash-ring {:ip (str (ip) "-5") :port "5555"}) "foo"))
     (println (partitions-for-node hash-ring {:ip (str (ip) "-2") :port "5555"})))
 
