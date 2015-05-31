@@ -229,7 +229,7 @@
 (defn create-hash-ring
   ([nodes]
    (create-hash-ring nodes *partitions*))
-  ([nodes partitions ]
+  ([nodes partitions]
    (->> nodes
         (sort-by :ip)
         cycle
