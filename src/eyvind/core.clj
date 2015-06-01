@@ -233,6 +233,23 @@
        (range 0.0 (max-digest))
        vec))
 
+(defn join-interleaved-hash-ring [nodes node]
+  (let [partitions (count nodes)
+        n (count (set nodes))]
+    (->> (range 0 partitions (inc n))
+         (reduce (fn [nodes idx]
+                   (assoc nodes idx node)) nodes))))
+
+(defn create-interleaved-hash-ring [[node & nodes] ^long partitions]
+  (reduce join-interleaved-hash-ring (vec (repeat partitions node)) nodes))
+
+(defn leave-interleaved-hash-ring [nodes node]
+  (let [partitions (count nodes)
+        nodes (->> nodes
+                   distinct
+                   (remove #{node}))]
+    (create-interleaved-hash-ring nodes partitions)))
+
 (defn partition-for-key ^long [^long partitions k]
   (long (mod (inc (quot (consistent-double-hash k)
                         (partition-size partitions)))
@@ -318,6 +335,12 @@
     (println (consistent-double-hash "foo") (partition-for-key *partitions* "foo"))
     (println (nodes-for-key (depart-hash-ring hash-ring {:ip (str (ip) "-5") :port "5555"}) "foo"))
     (println (partitions-for-node hash-ring {:ip (str (ip) "-2") :port "5555"})))
+
+  (println (-> (create-interleaved-hash-ring ["node1"] 8)
+               (join-interleaved-hash-ring "node2")
+               (join-interleaved-hash-ring "node3")
+               (leave-interleaved-hash-ring "node3")))
+
 
   (with-open [context (zmq/context)]
     (zmq-server context)
