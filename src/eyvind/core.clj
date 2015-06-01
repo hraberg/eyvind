@@ -233,22 +233,25 @@
        (range 0.0 (max-digest))
        vec))
 
-(defn join-interleaved-hash-ring [nodes node]
-  (let [partitions (count nodes)
-        n (count (set nodes))]
-    (->> (range 0 partitions (inc n))
-         (reduce (fn [nodes idx]
-                   (assoc nodes idx node)) nodes))))
+(defn create-interleaved-hash-ring [nodes ^long partitions]
+  (let [[node & nodes] (sort nodes)]
+    (->> nodes
+         (reduce (fn [nodes node]
+                   (let [n (count (set nodes))]
+                     (->> (range 0 partitions (inc n))
+                          (reduce (fn [nodes idx]
+                                    (assoc nodes idx node)) nodes))))
+                 (vec (repeat partitions node)))
+         reverse
+         vec)))
 
-(defn create-interleaved-hash-ring [[node & nodes] ^long partitions]
-  (reduce join-interleaved-hash-ring (vec (repeat partitions node)) nodes))
+(defn join-interleaved-hash-ring [nodes node]
+  (-> nodes set (conj node)
+      (create-interleaved-hash-ring (count nodes))))
 
 (defn leave-interleaved-hash-ring [nodes node]
-  (let [partitions (count nodes)
-        nodes (->> nodes
-                   distinct
-                   (remove #{node}))]
-    (create-interleaved-hash-ring nodes partitions)))
+  (-> nodes set (disj node)
+      (create-interleaved-hash-ring (count nodes))))
 
 (defn partition-for-key ^long [^long partitions k]
   (long (mod (inc (quot (consistent-double-hash k)
