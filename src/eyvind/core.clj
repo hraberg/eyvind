@@ -61,7 +61,7 @@
       (.write header-bytes)
       (.write key-bytes)
       (.write v)
-      (cond-> sync? (-> .getFD .sync)))
+      (cond-> sync? (-> .getFD .sync))) ;; TODO: explore "rwd" mode and .getChannel (.flush false)
     bc))
 
 (defn put-entry
