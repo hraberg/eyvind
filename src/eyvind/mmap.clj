@@ -10,9 +10,6 @@
 
 ;; Based on http://nyeggen.com/post/2014-05-18-memory-mapping-%3E2gb-of-data-in-java/
 
-(set! *warn-on-reflection* true)
-(set! *unchecked-math* :warn-on-boxed)
-
 (def ^Unsafe unsafe (let [field (doto (.getDeclaredField Unsafe "theUnsafe")
                                   (.setAccessible true))]
                       (.get field nil)))

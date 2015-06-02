@@ -11,9 +11,6 @@
    [java.util LinkedHashMap]
    [java.util.zip CRC32]))
 
-(set! *warn-on-reflection* true)
-(set! *unchecked-math* :warn-on-boxed)
-
 (defrecord DiskStore [keydir sync? ^long growth-factor ^MappedFile log])
 (defrecord KeydirEntry [^long ts ^long value-size ^long value-offset])
 
