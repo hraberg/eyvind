@@ -1,4 +1,4 @@
-# eyvind
+# Eyvind
 
 *for a narrative art, far-seeing in lands and ages, in the service of freedom*
 -- Eyvind Johnson, Nobel Prize in Literature 1974 (shared with Harry Martinson)
