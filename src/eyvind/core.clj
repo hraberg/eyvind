@@ -233,16 +233,17 @@
 (defn nodes-for-key
   ([nodes k]
    (nodes-for-key nodes *replicas* k))
-  ([nodes replicas k]
+  ([nodes ^long replicas k]
    (->> (concat (drop (partition-for-key (count nodes) k) nodes)
                 (cycle nodes))
-        (take replicas))))
+        (take replicas)
+        distinct)))
 
 (defn partitions-for-node [nodes node]
   (->> nodes
        (map-indexed vector)
        (filter (comp #{node} second))
-       (map first)))
+       (mapv first)))
 
 (defn node-by-idx [hash-ring idx]
   (nth hash-ring idx))
