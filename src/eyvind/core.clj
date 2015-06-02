@@ -221,6 +221,9 @@
 ;; http://johnleach.co.uk/downloads/slides/riak-consistent-hashing.pdf
 ;; It looks like he adds the node by incrementally stealing vnodes, vnode1-node0 vnode5-node1 (assuming 4 nodes before)
 
+;; This is a quite good Riak Core overview:
+;; http://gotocon.com/dl/goto-aar-2012/slides/SteveVinoski_BuildingDistributedSystemsWithRiakCore.pdf
+
 (def ^:dynamic *partitions* 64)
 (def ^:dynamic *replicas* 3)
 
