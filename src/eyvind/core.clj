@@ -192,33 +192,8 @@
 (defn node-address [ip port]
   (str "tcp://" ip ":" port))
 
-(defn node-prefix [{:keys [ip] :as node} vnode]
-  (str "node-" (:ip node) "/vnode-" vnode))
-
-;; TODO: Figure out parititioning of keys as in the Riak explaination.
-;;       This is a total stab in the dark, picks 64 partitions based on most significant bits.
-;;       http://www.johnchukwuma.com/training/Riak%20Handbook.pdf
-;;       I think there needs to be a mix between this and the modulo approach.
-
-;; Central to any Riak cluster is a 160-bit integer space (often
-;; referred to as "the ring") which is divided into equally-sized
-;; partitions.
-
-;; Physical servers, referred to in the cluster as "nodes", run a
-;; certain number of virtual nodes, or "vnodes". Each vnode will claim
-;; a partition on the ring. The number of active vnodes is determined
-;; by the number of partitions into which the ring has been split, a
-;; static number chosen at cluster initialisation.
-
-;; OK, so this may work, split ring in partitions, each node picks partitions / servers virtual nodes.
-;; Replicas goes to n next partitions and hence nodes. How to keep partitions stable?
-;; The virtual nodes are the partitions.
-
-;; This slide deck shows examples of vnodes being re-assigned, but don't explain how really:
 ;; http://johnleach.co.uk/downloads/slides/riak-consistent-hashing.pdf
-;; It looks like he adds the node by incrementally stealing vnodes, vnode1-node0 vnode5-node1 (assuming 4 nodes before)
-
-;; This is a quite good Riak Core overview:
+;; http://www.johnchukwuma.com/training/Riak%20Handbook.pdf
 ;; http://gotocon.com/dl/goto-aar-2012/slides/SteveVinoski_BuildingDistributedSystemsWithRiakCore.pdf
 
 (def ^:dynamic *partitions* 64)
@@ -227,79 +202,50 @@
 (defn partition-size ^double [^long partitions]
   (quot (max-digest) partitions))
 
-(defn ring-ranges [^long partitions]
-  (->> partitions
-       partition-size
-       (range 0.0 (max-digest))
-       vec))
+(defn create-hash-ring
+  ([nodes]
+   (create-hash-ring nodes *partitions*))
+  ([nodes ^long partitions]
+   (let [[node & nodes] (sort nodes)]
+     (->> nodes
+          (reduce (fn [nodes node]
+                    (let [n (count (set nodes))]
+                      (->> (range 0 partitions (inc n))
+                           (reduce (fn [nodes idx]
+                                     (assoc nodes idx node)) nodes))))
+                  (vec (repeat partitions node)))
+          reverse
+          vec))))
 
-(defn create-interleaved-hash-ring [nodes ^long partitions]
-  (let [[node & nodes] (sort nodes)]
-    (->> nodes
-         (reduce (fn [nodes node]
-                   (let [n (count (set nodes))]
-                     (->> (range 0 partitions (inc n))
-                          (reduce (fn [nodes idx]
-                                    (assoc nodes idx node)) nodes))))
-                 (vec (repeat partitions node)))
-         reverse
-         vec)))
-
-(defn join-interleaved-hash-ring [nodes node]
+(defn join-hash-ring [nodes node]
   (-> nodes set (conj node)
-      (create-interleaved-hash-ring (count nodes))))
+      (create-hash-ring (count nodes))))
 
-(defn leave-interleaved-hash-ring [nodes node]
+(defn depart-hash-ring [nodes node]
   (-> nodes set (disj node)
-      (create-interleaved-hash-ring (count nodes))))
+      (create-hash-ring (count nodes))))
 
 (defn partition-for-key ^long [^long partitions k]
   (long (mod (inc (quot (consistent-double-hash k)
                         (partition-size partitions)))
              partitions)))
 
-(defn create-hash-ring
-  ([nodes]
-   (create-hash-ring nodes *partitions*))
-  ([nodes partitions]
-   (->> nodes
-        (sort-by :ip)
-        cycle
-        (map vector (ring-ranges partitions))
-        (into (sorted-map)))))
-
-(defn join-hash-ring [hash-ring node]
-  (-> hash-ring
-      vals
-      set
-      (conj node)
-      (create-hash-ring (count hash-ring))))
-
-(defn depart-hash-ring [hash-ring node]
-  (-> hash-ring
-      vals
-      set
-      (disj node)
-      (create-hash-ring (count hash-ring))))
-
 (defn nodes-for-key
-  ([hash-ring k]
-   (nodes-for-key hash-ring *replicas* k))
-  ([hash-ring replicas k]
-   (->> (concat (subseq hash-ring >= (consistent-double-hash k))
-                (cycle hash-ring))
-        (map val)
+  ([nodes k]
+   (nodes-for-key nodes *replicas* k))
+  ([nodes replicas k]
+   (->> (concat (drop (partition-for-key (count nodes) k) nodes)
+                (cycle nodes))
         (take replicas))))
 
-(defn partitions-for-node [hash-ring node]
-  (->> hash-ring
-       vals
+(defn partitions-for-node [nodes node]
+  (->> nodes
        (map-indexed vector)
        (filter (comp #{node} second))
        (map first)))
 
 (defn node-by-idx [hash-ring idx]
-  (nth (vals hash-ring) idx))
+  (nth hash-ring idx))
 
 ;; ZeroMQ
 
@@ -329,21 +275,16 @@
   (swap! bc put-entry "foo" (.getBytes "bar" "UTF-8"))
   (String. (get-entry @bc "foo") "UTF-8")
 
-  (let [hash-ring (create-hash-ring [{:ip (str (ip) "-1") :port "5555"}
-                                     {:ip (str (ip) "-2") :port "5555"}
-                                     {:ip (str (ip) "-3") :port "5555"}
-                                     {:ip (str (ip) "-4") :port "5555"}
-                                     {:ip (str (ip) "-5") :port "5555"}])]
+  (let [hash-ring (create-hash-ring (mapv (partial str (ip) "-") (range 1 6)))]
     (println (nodes-for-key hash-ring "foo"))
     (println (consistent-double-hash "foo") (partition-for-key *partitions* "foo"))
     (println (nodes-for-key (depart-hash-ring hash-ring {:ip (str (ip) "-5") :port "5555"}) "foo"))
-    (println (partitions-for-node hash-ring {:ip (str (ip) "-2") :port "5555"})))
+    (println (partitions-for-node hash-ring (str (ip) "-2"))))
 
-  (println (-> (create-interleaved-hash-ring ["node1"] 8)
-               (join-interleaved-hash-ring "node2")
-               (join-interleaved-hash-ring "node3")
-               (leave-interleaved-hash-ring "node3")))
-
+  (println (-> (create-hash-ring ["node1"] 8)
+               (join-hash-ring "node2")
+               (join-hash-ring "node3")
+               (depart-hash-ring "node3")))
 
   (with-open [context (zmq/context)]
     (zmq-server context)
