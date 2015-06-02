@@ -5,6 +5,9 @@
 
 ### Eyvind is an experimental distributed rule engine written in Clojure.
 
+Foundations inspired by Riak Core. Higher level inspired by Dedalus, Linear Meld, CRDTs and Angelic CHR. Aims to provide Constraint Handling Rules as language, built on a lower-level distributed Datalog and linear logic. Minimal set of dependencies (JeroMQ) to facilitate use as library. Standalone mode with REST (and ZeroMQ) API to be provided as add-on.
+
+
 ## References
 
 http://basho.com/assets/bitcask-intro.pdf
