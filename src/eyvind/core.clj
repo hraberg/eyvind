@@ -196,6 +196,11 @@
 ;; http://www.johnchukwuma.com/training/Riak%20Handbook.pdf
 ;; http://gotocon.com/dl/goto-aar-2012/slides/SteveVinoski_BuildingDistributedSystemsWithRiakCore.pdf
 
+;; TODO: One simple design is to have each vnode partition be its own bitcask.
+;;       Every real node will have several vnodes, some "active", but potentially parts of all of them.
+;;       Replication is done by sending the entire missing (by offset) log to another node missing the vnode.
+;;       Potentially this could be done bittorrent-like? Though not sure about the append only then. And who sends what?
+
 (def ^:dynamic *partitions* 64)
 (def ^:dynamic *replicas* 3)
 
