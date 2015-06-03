@@ -7,7 +7,7 @@
                  [org.zeromq/jeromq "0.3.4"]
                  [org.zeromq/cljzmq "0.1.4" :exclusions [org.zeromq/jzmq]]]
   :profiles {:dev {:dependencies [[org.clojure/core.async "0.1.346.0-17112a-alpha"]
-                                  [clojure-msgpack "1.1.0"]]}}
+                                  [clojure-msgpack "1.1.0" :exclusions [org.clojure/test.check]]]}}
   :global-vars {*warn-on-reflection* true
                 *unchecked-math* :warn-on-boxed}
   :java-source-paths ["src"]
