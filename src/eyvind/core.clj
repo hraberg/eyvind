@@ -200,6 +200,9 @@
 ;;       Every real node will have several vnodes, some "active", but potentially parts of all of them.
 ;;       Replication is done by sending the entire missing (by offset) log to another node missing the vnode.
 ;;       Potentially this could be done bittorrent-like? Though not sure about the append only then. And who sends what?
+;;       Remember that due to distribution, the logs of vnodes on different nodes might not be strictly in the same order.
+;;       Instead, the keydir needs to be merge aware, ie. using vector clocks.
+;;       This complicates replication, as it has to be done message by message. Obsolete messages might not need to go into the log?
 
 (def ^:dynamic *partitions* 64)
 (def ^:dynamic *replicas* 3)
