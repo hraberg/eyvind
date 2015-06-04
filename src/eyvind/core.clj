@@ -214,7 +214,7 @@
   ([nodes]
    (create-hash-ring nodes *partitions*))
   ([nodes ^long partitions]
-   (let [[node & nodes] (sort nodes)]
+   (let [[node & nodes] (sort nodes)] ;; TODO: sorting here is wrong.
      (->> nodes
           (reduce (fn [nodes node]
                     (let [n (count (set nodes))]
