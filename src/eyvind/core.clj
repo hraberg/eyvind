@@ -61,6 +61,7 @@
       (cond-> sync? (-> .getFD .sync))) ;; TODO: explore "rwd" mode and .getChannel (.flush false)
     bc))
 
+;; TODO: consider using ByteArray/wrap instead of strings as keys in the keydir.
 (defn put-entry
   ([bc ^String k ^bytes v]
    (put-entry bc (System/currentTimeMillis) k v))
