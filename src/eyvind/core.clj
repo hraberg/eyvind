@@ -257,6 +257,10 @@
 (defn node-by-idx [hash-ring idx]
   (nth hash-ring idx))
 
+;; Dotted Version Vectors
+;; TODO: implement based on https://github.com/ricardobcl/Dotted-Version-Vectors
+;;       this repo contains 3-4 different versions, each a small Erlang file.
+
 ;; ZeroMQ
 
 (defn zmq-server [context]
