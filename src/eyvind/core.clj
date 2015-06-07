@@ -257,6 +257,25 @@
 (defn node-by-idx [hash-ring idx]
   (nth hash-ring idx))
 
+;; Version Vectors
+
+(defn vv [node]
+  {node 0})
+
+(defn vv-event [vv node]
+  (update-in vv [node] (fnil inc 0)))
+
+(defn vv-dominates? [x y]
+  (boolean
+   (some->> (merge-with >= x y)
+            vals
+            (remove number?)
+            seq
+            (every? true?))))
+
+(defn vv-merge [x y]
+  (merge-with max x y))
+
 ;; Dotted Version Vectors
 ;; TODO: implement based on https://github.com/ricardobcl/Dotted-Version-Vectors
 ;;       this repo contains 3-4 different versions, each a small Erlang file.
