@@ -257,13 +257,24 @@
 (defn node-by-idx [hash-ring idx]
   (nth hash-ring idx))
 
+;; G-Counter CRDT
+
+(defn g-counter []
+  {})
+
+(defn g-counter-inc [gc k]
+  (update-in gc [k] (fnil inc 0)))
+
+(defn g-counter-merge [x y]
+  (merge-with max x y))
+
 ;; Version Vectors
 
 (defn vv [node]
-  {node 0})
+  (assoc (g-counter) node 0))
 
 (defn vv-event [vv node]
-  (update-in vv [node] (fnil inc 0)))
+  (g-counter-inc vv node))
 
 (defn vv-dominates? [x y]
   (boolean
@@ -274,7 +285,39 @@
             (every? true?))))
 
 (defn vv-merge [x y]
-  (merge-with max x y))
+  (g-counter-merge x y))
+
+;; Roshi-style CRDT LWW set:
+
+(defn lww-set []
+  {:adds {} :removes {}})
+
+(defn lww-new-timestamp? [{:keys [adds removes] :as coll} x ^long ts]
+  (and (< (long (adds x 0)) ts)
+       (< (long (removes x 0)) ts)))
+
+(defn lww-set-conj
+  ([coll x]
+   (lww-set-conj coll x (System/currentTimeMillis)))
+  ([coll x ts]
+   (cond-> coll
+     (lww-new-timestamp? coll x ts) (-> (update-in [:removes] dissoc x)
+                                        (update-in [:adds] assoc x ts)))))
+
+(defn lww-set-disj
+  ([coll x]
+   (lww-set-disj coll x (System/currentTimeMillis)))
+  ([coll x ts]
+   (cond-> coll
+     (lww-new-timestamp? coll x ts) (-> (update-in [:adds] dissoc x)
+                                        (update-in [:removes] assoc x ts)))))
+
+(defn lww-set-contains? [{:keys [adds]} x]
+  (contains? adds x))
+
+(defn lww-set-merge [x {:keys [adds removes]}]
+  (let [x (reduce (partial apply lww-set-conj) x adds)]
+    (reduce (partial apply lww-set-disj) x removes)))
 
 ;; Dotted Version Vectors
 ;; TODO: implement based on https://github.com/ricardobcl/Dotted-Version-Vectors
