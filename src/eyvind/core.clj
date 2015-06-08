@@ -360,7 +360,7 @@
 ;; get/put interface, section 2 and 6 in dvvset-dais.pdf
 
 (defn dvvs-get [dvvs-map k]
-  (let [dvvs (dvvs-map k)]
+  (when-let [dvvs (dvvs-map k)]
     (with-meta (dvvs-values dvvs) {:ctx (dvvs-join dvvs)})))
 
 (defn dvvs-put [dvvs-map r k v ctx]
