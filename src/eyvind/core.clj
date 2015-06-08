@@ -357,14 +357,19 @@
        (apply concat)
        vec))
 
-;; Speculative get/put interface, section 2 and 6 in dvvset-dais.pdf
+;; get/put interface, section 2 and 6 in dvvset-dais.pdf
 
 (defn dvvs-get [dvvs-map k]
   (let [dvvs (dvvs-map k)]
     (with-meta (dvvs-values dvvs) {:ctx (dvvs-join dvvs)})))
 
 (defn dvvs-put [dvvs-map r k v ctx]
-  (update-in dvvs-map [k] dvvs-event ctx r v))
+  (-> dvvs-map
+      (update-in [k] dvvs-discard ctx)
+      (update-in [k] dvvs-event ctx r v)))
+
+(defn dvvs-ctx [v]
+  (-> v meta :ctx))
 
 ;; ZeroMQ
 
@@ -404,6 +409,12 @@
                (join-hash-ring "node2")
                (join-hash-ring "node3")
                (depart-hash-ring "node3")))
+
+  (let [dvvs-map (dvvs-put {:A (dvvs :r)} :r :A :v1 {})
+        get-a (dvvs-get dvvs-map :A)]
+    (println get-a)
+    (println (meta get-a))
+    (println (dvvs-put (dvvs-put dvvs-map :r :A :v2 {})  :r :A :v3 (dvvs-ctx get-a))))
 
   (with-open [context (zmq/context)]
     (zmq-server context)
