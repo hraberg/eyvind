@@ -354,7 +354,8 @@
 (defn dvvs-values [dvvs]
   (->> (for [[_ [_ l]] dvvs]
          l)
-       (apply concat)))
+       (apply concat)
+       vec))
 
 ;; Speculative get/put interface, section 2 and 6 in dvvset-dais.pdf
 
