@@ -320,8 +320,50 @@
     (reduce (partial apply lww-set-disj) x removes)))
 
 ;; Dotted Version Vectors
-;; TODO: implement based on https://github.com/ricardobcl/Dotted-Version-Vectors
-;;       this repo contains 3-4 different versions, each a small Erlang file.
+;; Based on http://haslab.uminho.pt/tome/files/dvvset-dais.pdf section 6.5.
+
+(defn dvvs [r]
+  {r [0 []]})
+
+(defn dvvs-sync [x y]
+  (merge-with
+   (fn [[^long n l] [^long n' l']]
+     [(max n n')
+      (if (> n n')
+        (take (+ (- n n') (count l')) l)
+        (take (+ (- n' n) (count l)) l'))])
+   x y))
+
+(defn dvvs-join [dvvs]
+  (->> (for [[r [n]] dvvs]
+         [r n])
+       (into {})))
+
+(defn dvvs-discard [dvvs vv]
+  (->> (for [[r [^long n l]] dvvs]
+         [r [n (vec (take (- n (long (vv r 0))) l))]])
+       (into {})))
+
+(defn dvvs-event [dvvs vv r v]
+  (->> (for [[i [^long n l]] dvvs]
+         [i (if (= i r)
+              [(inc n) (vec (cons v l))]
+              [(max n (long (vv i 0))) l])])
+       (into {})))
+
+(defn dvvs-values [dvvs]
+  (->> (for [[_ [_ l]] dvvs]
+         l)
+       (apply concat)))
+
+;; Speculative get/put interface, section 2 and 6 in dvvset-dais.pdf
+
+(defn dvvs-get [dvvs-map k]
+  (let [dvvs (dvvs-map k)]
+    (with-meta (dvvs-values dvvs) {:ctx (dvvs-join dvvs)})))
+
+(defn dvvs-put [dvvs-map r k v ctx]
+  (update-in dvvs-map [k] dvvs-event ctx r v))
 
 ;; ZeroMQ
 
