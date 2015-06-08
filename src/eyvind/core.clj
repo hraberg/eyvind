@@ -360,13 +360,13 @@
 ;; get/put interface, section 2 and 6 in dvvset-dais.pdf
 
 (defn dvvs-get [dvvs-map k]
-  (when-let [dvvs (dvvs-map k)]
+  (when-let [dvvs (dvvs-map k)] ;; should get dvvs values from replicas and sync into this map
     (with-meta (dvvs-values dvvs) {:ctx (dvvs-join dvvs)})))
 
 (defn dvvs-put [dvvs-map r k v ctx]
   (-> dvvs-map
       (update-in [k] dvvs-discard ctx)
-      (update-in [k] dvvs-event ctx r v)))
+      (update-in [k] dvvs-event ctx r v))) ;; should send dvvs value to replicas and sync
 
 (defn dvvs-ctx [v]
   (-> v meta :ctx))
