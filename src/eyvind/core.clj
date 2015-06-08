@@ -320,6 +320,7 @@
     (reduce (partial apply lww-set-disj) x removes)))
 
 ;; Dotted Version Vectors
+;; https://github.com/ricardobcl/Dotted-Version-Vectors
 ;; Based on http://haslab.uminho.pt/tome/files/dvvset-dais.pdf section 6.5.
 
 (defn dvvs [r]
