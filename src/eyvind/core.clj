@@ -215,7 +215,7 @@
   ([nodes]
    (create-hash-ring nodes *partitions*))
   ([nodes ^long partitions]
-   (let [[node & nodes] (sort nodes)] ;; TODO: sorting here is wrong.
+   (let [[node & nodes] nodes]
      (->> nodes
           (reduce (fn [nodes node]
                     (let [n (count (set nodes))]
@@ -227,11 +227,11 @@
           vec))))
 
 (defn join-hash-ring [nodes node]
-  (-> nodes set (conj node)
+  (-> nodes distinct (concat [node])
       (create-hash-ring (count nodes))))
 
 (defn depart-hash-ring [nodes node]
-  (-> nodes set (disj node)
+  (-> (remove #{node} (distinct nodes))
       (create-hash-ring (count nodes))))
 
 (defn partition-for-key ^long [^long partitions k]
@@ -401,9 +401,10 @@
   (String. (get-entry @bc "foo") "UTF-8")
 
   (let [hash-ring (create-hash-ring (mapv (partial str (ip) "-") (range 1 6)))]
+    (println (frequencies hash-ring))
     (println (nodes-for-key hash-ring "foo"))
     (println (consistent-double-hash "foo") (partition-for-key *partitions* "foo"))
-    (println (nodes-for-key (depart-hash-ring hash-ring {:ip (str (ip) "-5") :port "5555"}) "foo"))
+    (println (nodes-for-key (depart-hash-ring hash-ring (str (ip) "-5")) "foo"))
     (println (partitions-for-node hash-ring (str (ip) "-2"))))
 
   (println (-> (create-hash-ring ["node1"] 8)
