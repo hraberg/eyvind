@@ -196,6 +196,7 @@
 ;; http://johnleach.co.uk/downloads/slides/riak-consistent-hashing.pdf
 ;; http://www.johnchukwuma.com/training/Riak%20Handbook.pdf
 ;; http://gotocon.com/dl/goto-aar-2012/slides/SteveVinoski_BuildingDistributedSystemsWithRiakCore.pdf
+;; http://www.slideshare.net/eredmond/distributed-stat-structures https://github.com/coderoshi/dds
 
 ;; TODO: One simple design is to have each vnode partition be its own bitcask.
 ;;       Every real node will have several vnodes, some "active", but potentially parts of all of them.
