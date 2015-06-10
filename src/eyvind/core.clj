@@ -262,6 +262,14 @@
 (defn node-by-idx [nodes idx]
   (nth nodes idx))
 
+;; CRDTs
+
+(defn compare->= [x y]
+  (pos? (compare x y)))
+
+(defn max-compare [x y]
+  (if (compare->= x y) x y))
+
 ;; G-Counter CRDT
 
 (defn g-counter []
@@ -272,25 +280,6 @@
 
 (defn g-counter-merge [x y]
   (merge-with max x y))
-
-;; Version Vectors
-
-(defn vv [node]
-  (assoc (g-counter) node 0))
-
-(defn vv-event [vv node]
-  (g-counter-inc vv node))
-
-(defn vv-dominates? [x y]
-  (boolean
-   (some->> (merge-with >= x y)
-            vals
-            (remove number?)
-            seq
-            (every? true?))))
-
-(defn vv-merge [x y]
-  (g-counter-merge x y))
 
 ;; Roshi-style CRDT LWW set:
 
@@ -323,6 +312,27 @@
 (defn lww-set-merge [x {:keys [adds removes]}]
   (let [x (reduce (partial apply lww-set-conj) x adds)]
     (reduce (partial apply lww-set-disj) x removes)))
+
+;; Logical Clocks
+
+;; Version Vectors
+
+(defn vv [node]
+  (assoc (g-counter) node 0))
+
+(defn vv-event [vv node]
+  (g-counter-inc vv node))
+
+(defn vv-dominates? [x y]
+  (boolean
+   (some->> (merge-with >= x y)
+            vals
+            (remove number?)
+            seq
+            (every? true?))))
+
+(defn vv-merge [x y]
+  (g-counter-merge x y))
 
 ;; Dotted Version Vectors
 ;; https://github.com/ricardobcl/Dotted-Version-Vectors
