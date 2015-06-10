@@ -314,7 +314,7 @@
   ([gc k]
    (g-counter-inc gc k 1))
   ([gc k delta]
-    (update-in gc [k] (fnil (partial + delta) 0))))
+   (update-in gc [k] (fnil (partial + delta) 0))))
 
 ;; Roshi-style CRDT LWW set:
 
@@ -425,14 +425,14 @@
 (defn dvvs-discard [dvvs vv]
   (->> (for [[r [^long n l]] dvvs]
          [r [n (vec (take (- n (long (get vv r 0))) l))]])
-       (into {})))
+       (into (->DVVSet))))
 
 (defn dvvs-event [dvvs vv r v]
   (->> (for [[i [^long n l]] dvvs]
          [i (if (= i r)
               [(inc n) (vec (cons v l))]
               [(max n (long (get vv i 0))) l])])
-       (into {})))
+       (into (->DVVSet))))
 
 (defn dvvs-values [dvvs]
   (->> (for [[_ [_ l]] dvvs]
