@@ -198,6 +198,9 @@
 ;; http://gotocon.com/dl/goto-aar-2012/slides/SteveVinoski_BuildingDistributedSystemsWithRiakCore.pdf
 ;; http://www.slideshare.net/eredmond/distributed-stat-structures https://github.com/coderoshi/dds
 
+;; http://www.researchgate.net/publication/266643331_Load_Balancing_Technology_Based_On_Consistent_Hashing_For_Database_Cluster_Systems
+;; In this paper nodes are never removed, but partitions are instead left empty / dead.
+
 ;; TODO: One simple design is to have each vnode partition be its own bitcask.
 ;;       Every real node will have several vnodes, some "active", but potentially parts of all of them.
 ;;       Replication is done by sending the entire missing (by offset) log to another node missing the vnode.
@@ -211,29 +214,6 @@
 
 (defn partition-size ^double [^long partitions]
   (quot (max-digest) partitions))
-
-(defn create-hash-ring
-  ([nodes]
-   (create-hash-ring nodes *partitions*))
-  ([nodes ^long partitions]
-   (let [[node & nodes] nodes]
-     (->> nodes
-          (reduce (fn [nodes node]
-                    (let [n (count (set nodes))]
-                      (->> (range 0 partitions (inc n))
-                           (reduce (fn [nodes idx]
-                                     (assoc nodes idx node)) nodes))))
-                  (vec (repeat partitions node)))
-          reverse
-          vec))))
-
-(defn join-hash-ring [nodes node]
-  (-> nodes distinct (concat [node])
-      (create-hash-ring (count nodes))))
-
-(defn depart-hash-ring [nodes node]
-  (-> (remove #{node} (distinct nodes))
-      (create-hash-ring (count nodes))))
 
 (defn partition-for-key ^long [^long partitions k]
   (long (mod (inc (quot (consistent-double-hash k)
@@ -257,6 +237,25 @@
 
 (defn node-by-idx [hash-ring idx]
   (nth hash-ring idx))
+
+(defn join-hash-ring [nodes node]
+  (->> (range 0 (count nodes) (inc (count (set nodes))))
+       (reduce (fn [nodes idx]
+                 (assoc nodes idx node)) nodes)))
+
+(defn create-hash-ring
+  ([nodes]
+   (create-hash-ring nodes *partitions*))
+  ([nodes ^long partitions]
+   (let [[node & nodes] nodes]
+     (->> nodes
+          (reduce join-hash-ring (vec (repeat partitions node)))
+          reverse
+          vec))))
+
+(defn depart-hash-ring [nodes node]
+  (->> nodes
+       (map (some-fn {node ::dead} identity))))
 
 ;; G-Counter CRDT
 
