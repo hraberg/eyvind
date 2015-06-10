@@ -212,6 +212,30 @@
 (def ^:dynamic *partitions* 64)
 (def ^:dynamic *replicas* 3)
 
+(defn create-hash-ring
+  ([nodes]
+   (create-hash-ring nodes *partitions*))
+  ([nodes ^long partitions]
+   (->> nodes
+        cycle
+        (take partitions)
+        vec)))
+
+(defn join-hash-ring [nodes node]
+  (let [partitions (count nodes)
+        n (count (distinct nodes))]
+    (->> (range n partitions (inc n))
+         (reduce (fn [nodes idx]
+                   (assoc nodes idx node))
+                 nodes))))
+
+(defn depart-hash-ring
+  ([nodes node]
+   (depart-hash-ring nodes node ::departed))
+  ([nodes node state]
+   (->> nodes
+        (mapv (some-fn {node state} identity)))))
+
 (defn partition-size ^double [^long partitions]
   (quot (max-digest) partitions))
 
@@ -235,27 +259,8 @@
        (filter (comp #{node} second))
        (mapv first)))
 
-(defn node-by-idx [hash-ring idx]
-  (nth hash-ring idx))
-
-(defn join-hash-ring [nodes node]
-  (->> (range 0 (count nodes) (inc (count (set nodes))))
-       (reduce (fn [nodes idx]
-                 (assoc nodes idx node)) nodes)))
-
-(defn create-hash-ring
-  ([nodes]
-   (create-hash-ring nodes *partitions*))
-  ([nodes ^long partitions]
-   (let [[node & nodes] nodes]
-     (->> nodes
-          (reduce join-hash-ring (vec (repeat partitions node)))
-          reverse
-          vec))))
-
-(defn depart-hash-ring [nodes node]
-  (->> nodes
-       (map (some-fn {node ::dead} identity))))
+(defn node-by-idx [nodes idx]
+  (nth nodes idx))
 
 ;; G-Counter CRDT
 
@@ -416,6 +421,10 @@
                (join-hash-ring "node2")
                (join-hash-ring "node3")
                (depart-hash-ring "node3")))
+
+  (println (-> (create-hash-ring [:A :B :C] 12)
+               (join-hash-ring :D)
+               (depart-hash-ring :B)))
 
   (let [dvvs-map (dvvs-put {:A (dvvs :r)} :r :A :v1 {})
         get-a (dvvs-get dvvs-map :A)]
