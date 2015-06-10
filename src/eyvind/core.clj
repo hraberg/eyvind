@@ -378,6 +378,7 @@
   (-> v meta :ctx))
 
 ;; SWIM: Scalable, Weakly Consistent, Infection-Style, Membership Protocol
+;; http://www.cs.cornell.edu/~asdas/research/dsn02-swim.pdf
 ;; https://speakerd.s3.amazonaws.com/presentations/5d140b302fbf01327e4e42c106afd3ef/2014-SWIM.pdf
 ;; https://github.com/hashicorp/memberlist
 ;; 200ms gossip, 1s failure
