@@ -232,9 +232,9 @@
 (defn depart-hash-ring
   ([nodes node]
    (depart-hash-ring nodes node ::departed))
-  ([nodes node state]
+  ([nodes node reason]
    (->> nodes
-        (mapv (some-fn {node state} identity)))))
+        (mapv (some-fn {node reason} identity)))))
 
 (defn partition-size ^double [^long partitions]
   (quot (max-digest) partitions))
