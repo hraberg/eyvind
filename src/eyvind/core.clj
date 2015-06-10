@@ -1,9 +1,11 @@
 (ns eyvind.core
   (:require [clojure.java.io :as io]
+            [clojure.set]
             [eyvind.mmap :as mmap]
             [zeromq.zmq :as zmq])
   (:import
    [eyvind.mmap MappedFile]
+   [clojure.lang IPersistentMap IPersistentSet]
    [java.io RandomAccessFile]
    [java.net InetAddress NetworkInterface]
    [java.nio ByteBuffer ByteOrder]
@@ -270,25 +272,68 @@
 (defn max-compare [x y]
   (if (compare->= x y) x y))
 
+(defprotocol CRDT
+  (crdt-least [_])
+  (crdt-merge [_ other]))
+
+(extend-protocol CRDT
+  IPersistentMap
+  (crdt-least [this]
+    (empty this))
+  (crdt-merge [this other]
+    (merge-with crdt-merge this other))
+
+  IPersistentSet
+  (crdt-empty [this]
+    (empty this))
+  (crdt-merge [this other]
+    (clojure.set/union this other))
+
+  Boolean
+  (crdt-least [_]
+    false)
+  (crdt-merge [this other]
+    (boolean (or this other)))
+
+  Long
+  (crdt-least [_]
+    0)
+  (crdt-merge [this other]
+    (max (long this) (long other))))
+
 ;; G-Counter CRDT
 
-(defn g-counter []
-  {})
+(defrecord GCounter []
+  CRDT
+  (crdt-least [_]
+    (->GCounter))
+  (crdt-merge [this other]
+    (merge-with crdt-merge this other)))
 
-(defn g-counter-inc [gc k]
-  (update-in gc [k] (fnil inc 0)))
-
-(defn g-counter-merge [x y]
-  (merge-with max x y))
+(defn g-counter-inc
+  ([gc k]
+   (g-counter-inc gc k 1))
+  ([gc k delta]
+    (update-in gc [k] (fnil (partial + delta) 0))))
 
 ;; Roshi-style CRDT LWW set:
 
-(defn lww-set []
-  {:adds {} :removes {}})
+(declare lww-set)
 
-(defn lww-new-timestamp? [{:keys [adds removes] :as coll} x ^long ts]
-  (and (< (long (adds x 0)) ts)
-       (< (long (removes x 0)) ts)))
+(defrecord LWWSet [adds removes]
+  CRDT
+  (crdt-least [this]
+    (lww-set))
+  (crdt-merge [this {:keys [adds removes]}]
+    (let [x (reduce (partial apply lww-set-conj) this adds)]
+      (reduce (partial apply lww-set-disj) x removes))))
+
+(defn lww-set []
+  (->LWWSet {} {}))
+
+(defn lww-new-timestamp? [{:keys [adds removes] :as coll} x ts]
+  (and (compare->= ts (adds x (crdt-least ts)))
+       (compare->= ts (removes x (crdt-least ts)))))
 
 (defn lww-set-conj
   ([coll x]
@@ -309,62 +354,84 @@
 (defn lww-set-contains? [{:keys [adds]} x]
   (contains? adds x))
 
-(defn lww-set-merge [x {:keys [adds removes]}]
-  (let [x (reduce (partial apply lww-set-conj) x adds)]
-    (reduce (partial apply lww-set-disj) x removes)))
-
 ;; Logical Clocks
 
 ;; Version Vectors
 
+(defrecord VersionVector []
+  CRDT
+  (crdt-least [_]
+    (->VersionVector))
+  (crdt-merge [this other]
+    (merge-with crdt-merge this other))
+
+  Comparable
+  (compareTo [this other]
+    (let [x (map->VersionVector (select-keys this (keys other)))]
+      (cond
+        (and (= x other)
+             (> (count this) (count other))) 1
+        (= this other) 0
+        (some->> (merge-with compare->= x other)
+                 vals
+                 (remove number?)
+                 seq
+                 (every? true?)) 1
+        :else -1))))
+
 (defn vv [node]
-  (assoc (g-counter) node 0))
+  (assoc (->VersionVector) node 0))
 
 (defn vv-event [vv node]
   (g-counter-inc vv node))
 
 (defn vv-dominates? [x y]
-  (boolean
-   (some->> (merge-with >= x y)
-            vals
-            (remove number?)
-            seq
-            (every? true?))))
-
-(defn vv-merge [x y]
-  (g-counter-merge x y))
+  (compare->= x y))
 
 ;; Dotted Version Vectors
 ;; https://github.com/ricardobcl/Dotted-Version-Vectors
 ;; Based on http://haslab.uminho.pt/tome/files/dvvset-dais.pdf section 6.5.
 
+(declare dvvs-join)
+
+(defrecord DVVSet []
+  CRDT
+  (crdt-least [_]
+    (->DVVSet))
+  (crdt-merge [this other]
+    (merge-with
+     (fn [[^long n l] [^long n' l']]
+       [(max n n')
+        (if (> n n')
+          (take (+ (- n n') (count l')) l)
+          (take (+ (- n' n) (count l)) l'))])
+     this other))
+
+  Comparable
+  (compareTo [this other]
+    (compare (dvvs-join this) (dvvs-join other))))
+
 (defn dvvs [r]
-  {r [0 []]})
+  (assoc (->DVVSet) r [0 []]))
 
 (defn dvvs-sync [x y]
-  (merge-with
-   (fn [[^long n l] [^long n' l']]
-     [(max n n')
-      (if (> n n')
-        (take (+ (- n n') (count l')) l)
-        (take (+ (- n' n) (count l)) l'))])
-   x y))
+  (crdt-merge x y))
 
 (defn dvvs-join [dvvs]
   (->> (for [[r [n]] dvvs]
          [r n])
-       (into {})))
+       (into (->VersionVector))))
 
 (defn dvvs-discard [dvvs vv]
   (->> (for [[r [^long n l]] dvvs]
-         [r [n (vec (take (- n (long (vv r 0))) l))]])
+         [r [n (vec (take (- n (long (get vv r 0))) l))]])
        (into {})))
 
 (defn dvvs-event [dvvs vv r v]
   (->> (for [[i [^long n l]] dvvs]
          [i (if (= i r)
               [(inc n) (vec (cons v l))]
-              [(max n (long (vv i 0))) l])])
+              [(max n (long (get vv i 0))) l])])
        (into {})))
 
 (defn dvvs-values [dvvs]
