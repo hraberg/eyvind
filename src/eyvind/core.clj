@@ -292,6 +292,7 @@
                       (remove (comp nil? second))
                       seq
                       (into (crdt-least x)))
+    (set? x) (some-> (clojure.set/difference y x) seq set)
     :else (if (compare-> x y) x y)))
 
 (defn apply-deep-ordered-diff [x diff]
@@ -305,12 +306,14 @@
                                 (vec (repeat (apply max (keys diff)) nil))
                                 (crdt-least diff)))
                         diff)
+    (set? diff) (clojure.set/union x diff)
+    (nil? diff) x
     (compare-> x diff) x
     :else diff))
 
 (defn crdt-delta [x y]
-  (->> (deep-ordered-diff x y)
-       (apply-deep-ordered-diff (crdt-least x))))
+  (some->> (deep-ordered-diff x y)
+           (apply-deep-ordered-diff (crdt-least x))))
 
 (defprotocol CRDT
   (crdt-least [_])
