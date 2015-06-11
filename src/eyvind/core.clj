@@ -274,6 +274,7 @@
   (pos? (compare x y)))
 
 ;; Speculative spike trying to deduct the delta from the structure before/after modification.
+;; This should be part if the CRDT protocol if it works instead of cond hacks.
 (defn deep-ordered-diff [x y]
   (cond
     (vector? x) (with-meta
