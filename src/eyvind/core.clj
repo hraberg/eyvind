@@ -375,6 +375,9 @@
   ([gc k delta]
    (crdt-merge gc (g-counter-inc-delta gc k delta))))
 
+(defn g-counter-value [gc]
+  (reduce + (vals gc)))
+
 ;; Roshi-style CRDT LWW set:
 ;; https://github.com/soundcloud/roshi
 
