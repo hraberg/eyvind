@@ -270,11 +270,8 @@
 ;;       http://arxiv.org/pdf/1410.2803.pdf
 ;;       http://www.eecs.berkeley.edu/Pubs/TechRpts/2012/EECS-2012-167.pdf
 
-(defn compare->= [x y]
+(defn compare-> [x y]
   (pos? (compare x y)))
-
-(defn max-compare [x y]
-  (if (compare->= x y) x y))
 
 (defprotocol CRDT
   (crdt-least [_])
@@ -328,7 +325,7 @@
   ([gc k]
    (g-counter-inc-delta gc k 1))
   ([gc k ^long delta]
-   (assoc (->GCounter) k (+ delta (long (get gc k 0))))))
+   (assoc (crdt-least gc) k (+ delta (long (get gc k 0))))))
 
 (defn g-counter-inc
   ([gc k]
@@ -353,8 +350,7 @@
   (->LWWSet {} {}))
 
 (defn lww-new-timestamp? [{:keys [adds removes] :as coll} x ts]
-  (and (compare->= ts (adds x (crdt-least ts)))
-       (compare->= ts (removes x (crdt-least ts)))))
+  (compare-> ts (or (adds x) (removes x))))
 
 (defn lww-set-update [coll x ts from to]
   (cond-> coll
@@ -385,23 +381,28 @@
   (contains? adds x))
 
 ;; From http://www.eecs.berkeley.edu/Pubs/TechRpts/2012/EECS-2012-167.pdf
+;; And https://github.com:CBaquero/delta-enabled-crdts
 
-(defrecord LPair [order value]
+(defrecord LexPair [order value]
   CRDT
   (crdt-least [this]
-    (->LPair (crdt-least order) (crdt-least value)))
+    (->LexPair (crdt-least order) (crdt-least value)))
   (crdt-merge [this other]
-    (let [other ^LPair other]
-      (case (compare (.order this) (.order other))
-        (0 1) this
-        -1 other
-        (->LPair (crdt-merge (.order this) (.order other))
-                 (if (satisfies? CRDT (.value this))
-                   (crdt-merge (.value this) (.value other))
-                   #{(.value this) (.value other)}))))))
+    (case (compare this other)
+      (0 1) this
+      -1 other
+      (let [other ^LexPair other]
+        (->LexPair (crdt-merge (.order this) (.order other))
+                   (if (satisfies? CRDT (.value this))
+                     (crdt-merge (.value this) (.value other))
+                     #{(.value this) (.value other)})))))
 
-(defn lpair [order value]
-  (->LPair order value))
+  Comparable
+  (compareTo [this other]
+    (compare (.order this) (.order ^LexPair other))))
+
+(defn lex-pair [order value]
+  (->LexPair order value))
 
 ;; Logical Clocks
 
@@ -421,7 +422,7 @@
         (and (= x other)
              (> (count this) (count other))) 1
         (= this other) 0
-        (some->> (merge-with compare->= x other)
+        (some->> (merge-with compare-> x other)
                  vals
                  (remove number?)
                  seq
@@ -432,15 +433,19 @@
 (defn vv [node]
   (assoc (->VersionVector) node 0))
 
+(defn vv-event-delta [vv node]
+  (g-counter-inc-delta vv node))
+
 (defn vv-event [vv node]
   (g-counter-inc vv node))
 
 (defn vv-dominates? [x y]
-  (compare->= x y))
+  (compare-> x y))
 
 ;; Dotted Version Vectors
 ;; https://github.com/ricardobcl/Dotted-Version-Vectors
 ;; Based on http://haslab.uminho.pt/tome/files/dvvset-dais.pdf section 6.5.
+;; TODO: How to represent this using primitives like LexPair and VV?
 
 (declare dvvs-join)
 
@@ -452,9 +457,9 @@
     (merge-with
      (fn [[^long n l] [^long n' l']]
        [(max n n')
-        (if (> n n')
-          (take (+ (- n n') (count l')) l)
-          (take (+ (- n' n) (count l)) l'))])
+        (vec (if (> n n')
+               (take (+ (- n n') (count l')) l)
+               (take (+ (- n' n) (count l)) l')))])
      this other))
 
   Comparable
@@ -477,12 +482,18 @@
          [r [n (vec (take (- n (long (get vv r 0))) l))]])
        (into (->DVVSet))))
 
+(defn dvvs-event-delta [dvvs vv r v]
+  (->> (for [[i [^long n l]] dvvs
+             :let [ts (get vv i 0)]]
+         (if (= i r)
+           [i [(inc n) (vec (cons v l))]]
+           (when (compare-> ts n)
+             [ts l])))
+       (remove nil?)
+       (into (assoc (->DVVSet) r [(get vv r 0) [v]]))))
+
 (defn dvvs-event [dvvs vv r v]
-  (->> (for [[i [^long n l]] dvvs]
-         [i (if (= i r)
-              [(inc n) (vec (cons v l))]
-              [(max n (long (get vv i 0))) l])])
-       (into (->DVVSet))))
+  (crdt-merge dvvs (dvvs-event-delta dvvs vv r v)))
 
 (defn dvvs-values [dvvs]
   (->> (for [[_ [_ l]] dvvs]
