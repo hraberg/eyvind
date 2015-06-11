@@ -308,6 +308,10 @@
     (compare-> x diff) x
     :else diff))
 
+(defn crdt-delta [x y]
+  (->> (deep-ordered-diff x y)
+       (apply-deep-ordered-diff (crdt-least x))))
+
 (defprotocol CRDT
   (crdt-least [_])
   (crdt-merge [_ other]))
