@@ -273,6 +273,10 @@
 (defn compare-> [x y]
   (pos? (compare x y)))
 
+(defn should-diff? [x y]
+  (or (not (instance? Comparable x))
+      (compare-> x y)))
+
 ;; Speculative spike trying to deduct the delta from the structure before/after modification.
 ;; This should be part if the CRDT protocol if it works instead of cond hacks.
 (defn deep-ordered-diff [x y]
@@ -283,21 +287,18 @@
                   {:vector true})
     (map? x) (some->> (for [[k v] y
                             :let [v' (get x k)]
-                            :when (or (not (instance? Comparable v))
-                                      (compare-> v v'))]
+                            :when (should-diff? v v')]
                         [k (deep-ordered-diff v' v)])
                       (remove (comp nil? second))
                       seq
                       (into (crdt-least x)))
-    :else
-    (if (compare-> x y) x y)))
+    :else (if (compare-> x y) x y)))
 
 (defn apply-deep-ordered-diff [x diff]
   (cond
     (map? diff) (reduce (fn [x [k v]]
                           (let [v' (get x k)]
-                            (if (or (not (instance? Comparable v))
-                                    (compare-> v v'))
+                            (if (should-diff? v v')
                               (assoc x k (apply-deep-ordered-diff v' v))
                               x)))
                         (or x (if (-> diff meta :vector)
