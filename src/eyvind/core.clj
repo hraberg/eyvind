@@ -457,6 +457,11 @@
   (crdt-merge [this other]
     (merge-with crdt-merge this other))
 
+  ;; From Bud:
+  ;;   # Return true if this map is strictly smaller than or equal to the given
+  ;;   # map. "x" is strictly smaller than or equal to "y" if:
+  ;;   #     (a) every key in "x"  also appears in "y"
+  ;;   #     (b) for every key k in "x", x[k] <= y[k]
   Comparable
   (compareTo [this other]
     (let [x (map->VersionVector (select-keys this (keys other)))]
