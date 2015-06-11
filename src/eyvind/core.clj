@@ -463,11 +463,16 @@
     (->LPair (crdt-least clock) (crdt-least value)))
   (crdt-merge [this other]
     (let [other ^LPair other]
-      (case (compare (.clock this) (.clock other)) ;; this is wrong, need to merge when not comparable
-        1 this
+      (case (compare (.clock this) (.clock other))
+        (0 1) this
         -1 other
         (->LPair (crdt-merge (.clock this) (.clock other))
-                 (crdt-merge (.value this) (.value other)))))))
+                 (if (satisfies? CRDT (.value this))
+                   (crdt-merge (.value this) (.value other))
+                   #{(.value this) (.value other)}))))))
+
+(defn lpair [clock value]
+  (->LPair clock value))
 
 ;; SWIM: Scalable, Weakly Consistent, Infection-Style, Membership Protocol
 ;; http://www.cs.cornell.edu/~asdas/research/dsn02-swim.pdf
@@ -524,6 +529,11 @@
     (println get-a)
     (println (meta get-a))
     (println (dvvs-put (dvvs-put dvvs-map :r :A :v2 {})  :r :A :v3 (dvvs-ctx get-a))))
+
+  (crdt-merge {:foo (lpair (vv :node1) #{:bar})
+               :boz (lpair (vv :node2) #{:foo})}
+              {:foo (lpair (vv :node1) #{:boz})
+               :boz (lpair (vv-event (vv :node1) :node1) #{:baz})})
 
   (with-open [context (zmq/context)]
     (zmq-server context)
