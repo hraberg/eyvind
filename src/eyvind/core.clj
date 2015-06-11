@@ -273,6 +273,39 @@
 (defn compare-> [x y]
   (pos? (compare x y)))
 
+;; Speculative spike trying to deduct the delta from the structure before/after modification.
+(defn deep-ordered-diff [x y]
+  (cond
+    (vector? x) (with-meta
+                  (deep-ordered-diff (into {} (map-indexed vector x))
+                                     (into {} (map-indexed vector y)))
+                  {:vector true})
+    (map? x) (some->> (for [[k v] y
+                            :let [v' (get x k)]
+                            :when (or (not (instance? Comparable v))
+                                      (compare-> v v'))]
+                        [k (deep-ordered-diff v' v)])
+                      (remove (comp nil? second))
+                      seq
+                      (into (crdt-least x)))
+    :else
+    (if (compare-> x y) x y)))
+
+(defn apply-deep-ordered-diff [x diff]
+  (cond
+    (map? diff) (reduce (fn [x [k v]]
+                          (let [v' (get x k)]
+                            (if (or (not (instance? Comparable v))
+                                    (compare-> v v'))
+                              (assoc x k (apply-deep-ordered-diff v' v))
+                              x)))
+                        (or x (if (-> diff meta :vector)
+                                (vec (repeat (apply max (keys diff)) nil))
+                                (crdt-least diff)))
+                        diff)
+    (compare-> x diff) x
+    :else diff))
+
 (defprotocol CRDT
   (crdt-least [_])
   (crdt-merge [_ other]))
