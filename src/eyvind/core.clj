@@ -5,7 +5,7 @@
             [zeromq.zmq :as zmq])
   (:import
    [eyvind.mmap MappedFile]
-   [clojure.lang IPersistentMap IPersistentSet]
+   [clojure.lang IPersistentMap IPersistentSet IPersistentVector]
    [java.io RandomAccessFile]
    [java.net InetAddress NetworkInterface]
    [java.nio ByteBuffer ByteOrder]
@@ -288,6 +288,13 @@
     (empty this))
   (crdt-merge [this other]
     (clojure.set/union this other))
+
+  IPersistentVector
+  (crdt-least [this]
+    (empty this))
+  (crdt-merge [this other]
+    (assert (= (count this) (count other)))
+    (mapv crdt-merge this other))
 
   Boolean
   (crdt-least [_]
