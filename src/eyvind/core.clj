@@ -337,8 +337,9 @@
    (crdt-merge gc (g-counter-inc-delta gc k delta))))
 
 ;; Roshi-style CRDT LWW set:
+;; https://github.com/soundcloud/roshi
 
-(declare lww-set lww-set-conj lww-set-disj lww-set-update)
+(declare lww-set lww-set-conj lww-set-disj)
 
 (defrecord LWWSet [adds removes]
   CRDT
