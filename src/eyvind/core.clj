@@ -10,7 +10,7 @@
    [java.net InetAddress NetworkInterface]
    [java.nio ByteBuffer ByteOrder]
    [java.security MessageDigest]
-   [java.util LinkedHashMap]
+   [java.util LinkedHashMap UUID]
    [java.util.zip CRC32]))
 
 (defrecord DiskStore [keydir sync? ^long growth-factor ^MappedFile log])
@@ -425,6 +425,43 @@
 (defn lww-set-contains? [{:keys [adds]} x]
   (contains? adds x))
 
+(defn lww-set-value [{:keys [adds]}]
+  (->> adds keys set))
+
+(declare or-set)
+
+(defrecord ORSet [adds removes]
+  CRDT
+  (crdt-least [this]
+    (or-set))
+  (crdt-merge [this {:keys [adds removes]}] ;; TODO: this won't work for deltas
+    (->ORSet (crdt-merge (.adds this) adds)
+             (crdt-merge (.removes this) removes))))
+
+(defn or-set []
+  (->ORSet {} {}))
+
+(defn or-tag []
+  (UUID/randomUUID))
+
+(defn or-set-conj [coll x]
+  (update-in coll [:adds x] clojure.set/union #{(or-tag)}))
+
+(defn or-set-disj [coll x]
+  (-> coll
+      (update-in [:adds] dissoc x)
+      (update-in [:removes x] clojure.set/union (get-in coll [:adds x]))))
+
+(defn or-set-contains? [{:keys [adds removes]} x]
+  (->> (clojure.set/difference (adds x) (removes x))
+       count
+       pos?))
+
+(defn or-set-value [{:keys [adds] :as or-set}]
+  (->> (keys adds)
+       (filter (partial or-set-contains? or-set))
+       set))
+
 ;; From http://www.eecs.berkeley.edu/Pubs/TechRpts/2012/EECS-2012-167.pdf
 ;; And https://github.com:CBaquero/delta-enabled-crdts
 
@@ -448,6 +485,9 @@
 
 (defn lww-reg [order value]
   (->LWWReg order value))
+
+(defn lww-reg-value [^LWWReg reg]
+  (.value reg))
 
 ;; Logical Clocks
 
