@@ -324,15 +324,21 @@
 (defn g-counter [node]
   (assoc (->GCounter) node 0))
 
+(defn g-counter-inc-delta
+  ([gc k]
+   (g-counter-inc-delta gc k 1))
+  ([gc k ^long delta]
+   (assoc (->GCounter) k (+ delta (long (get gc k 0))))))
+
 (defn g-counter-inc
   ([gc k]
    (g-counter-inc gc k 1))
   ([gc k delta]
-   (update-in gc [k] (fnil (partial + delta) 0))))
+   (crdt-merge gc (g-counter-inc-delta gc k delta))))
 
 ;; Roshi-style CRDT LWW set:
 
-(declare lww-set)
+(declare lww-set lww-set-conj lww-set-disj lww-set-update)
 
 (defrecord LWWSet [adds removes]
   CRDT
@@ -349,21 +355,30 @@
   (and (compare->= ts (adds x (crdt-least ts)))
        (compare->= ts (removes x (crdt-least ts)))))
 
+(defn lww-set-update [coll x ts from to]
+  (cond-> coll
+    (lww-new-timestamp? coll x ts) (-> (update-in [from] dissoc x)
+                                       (update-in [to] assoc x ts))))
+
+(defn lww-set-conj-delta [coll x ts]
+  (cond-> (lww-set)
+    (lww-new-timestamp? coll x ts) (-> (update-in [:adds] assoc x ts))))
+
 (defn lww-set-conj
   ([coll x]
    (lww-set-conj coll x (System/currentTimeMillis)))
   ([coll x ts]
-   (cond-> coll
-     (lww-new-timestamp? coll x ts) (-> (update-in [:removes] dissoc x)
-                                        (update-in [:adds] assoc x ts)))))
+   (lww-set-update coll x ts :removes :adds)))
+
+(defn lww-set-disj-delta [coll x ts]
+  (cond-> (lww-set)
+    (lww-new-timestamp? coll x ts) (-> (update-in [:removes] assoc x ts))))
 
 (defn lww-set-disj
   ([coll x]
    (lww-set-disj coll x (System/currentTimeMillis)))
   ([coll x ts]
-   (cond-> coll
-     (lww-new-timestamp? coll x ts) (-> (update-in [:adds] dissoc x)
-                                        (update-in [:removes] assoc x ts)))))
+   (lww-set-update coll x ts :adds :removes)))
 
 (defn lww-set-contains? [{:keys [adds]} x]
   (contains? adds x))
