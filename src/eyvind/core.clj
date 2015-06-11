@@ -428,26 +428,26 @@
 ;; From http://www.eecs.berkeley.edu/Pubs/TechRpts/2012/EECS-2012-167.pdf
 ;; And https://github.com:CBaquero/delta-enabled-crdts
 
-(defrecord LexPair [order value]
+(defrecord LWWReg [order value]
   CRDT
   (crdt-least [this]
-    (->LexPair (crdt-least order) (crdt-least value)))
+    (->LWWReg (crdt-least order) (crdt-least value)))
   (crdt-merge [this other]
     (case (compare this other)
       (0 1) this
       -1 other
-      (let [other ^LexPair other]
-        (->LexPair (crdt-merge (.order this) (.order other))
-                   (if (satisfies? CRDT (.value this))
-                     (crdt-merge (.value this) (.value other))
-                     #{(.value this) (.value other)})))))
+      (let [other ^LWWReg other]
+        (->LWWReg (crdt-merge (.order this) (.order other))
+                  (if (satisfies? CRDT (.value this))
+                    (crdt-merge (.value this) (.value other))
+                    #{(.value this) (.value other)})))))
 
   Comparable
   (compareTo [this other]
-    (compare (.order this) (.order ^LexPair other))))
+    (compare (.order this) (.order ^LWWReg other))))
 
-(defn lex-pair [order value]
-  (->LexPair order value))
+(defn lww-reg [order value]
+  (->LWWReg order value))
 
 ;; Logical Clocks
 
@@ -495,7 +495,7 @@
 ;; Dotted Version Vectors
 ;; https://github.com/ricardobcl/Dotted-Version-Vectors
 ;; Based on http://haslab.uminho.pt/tome/files/dvvset-dais.pdf section 6.5.
-;; TODO: How to represent this using primitives like LexPair and VV?
+;; TODO: How to represent this using primitives like LWWReg and VV?
 
 (declare dvvs-join)
 
