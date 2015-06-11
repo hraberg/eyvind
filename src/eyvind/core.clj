@@ -377,6 +377,7 @@
                  (remove number?)
                  seq
                  (every? true?)) 1
+        (not= (keys this) (keys other)) Integer/MIN_VALUE ;; hack to represent non-overlapping values.
         :else -1))))
 
 (defn vv [node]
@@ -453,6 +454,20 @@
 
 (defn dvvs-ctx [v]
   (-> v meta :ctx))
+
+;; From http://www.eecs.berkeley.edu/Pubs/TechRpts/2012/EECS-2012-167.pdf
+
+(defrecord LPair [clock value]
+  CRDT
+  (crdt-least [this]
+    (->LPair (crdt-least clock) (crdt-least value)))
+  (crdt-merge [this other]
+    (let [other ^LPair other]
+      (case (compare (.clock this) (.clock other)) ;; this is wrong, need to merge when not comparable
+        1 this
+        -1 other
+        (->LPair (crdt-merge (.clock this) (.clock other))
+                 (crdt-merge (.value this) (.value other)))))))
 
 ;; SWIM: Scalable, Weakly Consistent, Infection-Style, Membership Protocol
 ;; http://www.cs.cornell.edu/~asdas/research/dsn02-swim.pdf
