@@ -1,11 +1,12 @@
 (ns eyvind.core
   (:require [clojure.java.io :as io]
             [clojure.set]
+            [clojure.string :as s]
             [eyvind.mmap :as mmap]
             [zeromq.zmq :as zmq])
   (:import
    [eyvind.mmap MappedFile]
-   [clojure.lang IPersistentMap IPersistentSet IPersistentVector]
+   [clojure.lang IPersistentMap IPersistentSet IPersistentVector BigInt]
    [java.io RandomAccessFile]
    [java.net InetAddress NetworkInterface]
    [java.nio ByteBuffer ByteOrder]
@@ -66,7 +67,7 @@
 ;; TODO: consider using ByteArray/wrap instead of strings as keys in the keydir.
 (defn put-entry
   ([bc ^String k ^bytes v]
-   (put-entry bc (System/currentTimeMillis) k v))
+   (put-entry bc (wall-clock) k v))
   ([bc ^long ts ^String k ^bytes v]
    (let [key-bytes (str-bytes k)
          header-bytes (header ts (count key-bytes) (count v))
@@ -84,7 +85,7 @@
 
 (defn remove-entry
   ([bc ^String k]
-   (remove-entry bc (System/currentTimeMillis) k))
+   (remove-entry bc (wall-clock) k))
   ([bc ^long ts ^String k]
     (let [key-bytes (str-bytes k)
           header-bytes (header ts (count key-bytes) tombstone-size)]
@@ -191,6 +192,20 @@
   (->> (ips)
        (remove (partial re-find #"^127\."))
        first))
+
+(defn mac-address
+  ([]
+   (mac-address (ip)))
+  ([ip]
+   (->> ip
+        InetAddress/getByName
+        NetworkInterface/getByInetAddress
+        .getHardwareAddress)))
+
+(defn mac-addres->str [mac]
+  (->> mac
+       (map (partial format "%02X"))
+       (s/join "-")))
 
 (defn node-address [ip port]
   (str "tcp://" ip ":" port))
@@ -361,6 +376,16 @@
   (crdt-merge [this other]
     (max (long this) (long other)))
   (crdt-value [this]
+    this)
+
+  Number
+  (crdt-least [_]
+    0N)
+  (crdt-merge [this other]
+    (if (pos? (compare this other))
+      this
+      other))
+  (crdt-value [this]
     this))
 
 ;; G-Counter CRDT
@@ -392,7 +417,7 @@
 ;; Roshi-style CRDT LWW set:
 ;; https://github.com/soundcloud/roshi
 
-(declare lww-set lww-set-conj lww-set-disj)
+(declare lww-set lww-set-conj lww-set-disj wall-clock)
 
 (defrecord LWWSet [adds removes]
   CRDT
@@ -402,7 +427,11 @@
     (let [x (reduce (partial apply lww-set-conj) this adds)]
       (reduce (partial apply lww-set-disj) x removes)))
   (crdt-value [this]
-    (->> adds keys set)))
+    (->> adds
+         keys
+         (into (sorted-set-by
+                (fn [x y]
+                  (compare (adds x) (adds y))))))))
 
 (defn lww-set []
   (->LWWSet {} {}))
@@ -421,7 +450,7 @@
 
 (defn lww-set-conj
   ([coll x]
-   (lww-set-conj coll x (System/currentTimeMillis)))
+   (lww-set-conj coll x (wall-clock)))
   ([coll x ts]
    (lww-set-update coll x ts :removes :adds)))
 
@@ -431,7 +460,7 @@
 
 (defn lww-set-disj
   ([coll x]
-   (lww-set-disj coll x (System/currentTimeMillis)))
+   (lww-set-disj coll x (wall-clock)))
   ([coll x ts]
    (lww-set-update coll x ts :adds :removes)))
 
@@ -505,6 +534,15 @@
   (->LWWReg order value))
 
 ;; Logical Clocks
+
+(defonce node-id (long (biginteger (mac-address))))
+(defonce node-counter (volatile! 0N))
+
+(defn wall-clock []
+  [(System/currentTimeMillis)
+   node-id
+   (vswap! node-counter (fn [^BigInt n]
+                          (.add n 1N)))])
 
 ;; Version Vectors
 
