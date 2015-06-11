@@ -265,6 +265,10 @@
   (nth nodes idx))
 
 ;; CRDTs
+;; TODO: State deltas are just small / single element CRDTs that are joined up to the full thing:
+;;       http://hal.upmc.fr/file/index/docid/555588/filename/techreport.pdf
+;;       http://arxiv.org/pdf/1410.2803.pdf
+;;       http://www.eecs.berkeley.edu/Pubs/TechRpts/2012/EECS-2012-167.pdf
 
 (defn compare->= [x y]
   (pos? (compare x y)))
@@ -317,6 +321,9 @@
   (crdt-merge [this other]
     (merge-with crdt-merge this other)))
 
+(defn g-counter [node]
+  (assoc (->GCounter) node 0))
+
 (defn g-counter-inc
   ([gc k]
    (g-counter-inc gc k 1))
@@ -360,6 +367,25 @@
 
 (defn lww-set-contains? [{:keys [adds]} x]
   (contains? adds x))
+
+;; From http://www.eecs.berkeley.edu/Pubs/TechRpts/2012/EECS-2012-167.pdf
+
+(defrecord LPair [order value]
+  CRDT
+  (crdt-least [this]
+    (->LPair (crdt-least order) (crdt-least value)))
+  (crdt-merge [this other]
+    (let [other ^LPair other]
+      (case (compare (.order this) (.order other))
+        (0 1) this
+        -1 other
+        (->LPair (crdt-merge (.order this) (.order other))
+                 (if (satisfies? CRDT (.value this))
+                   (crdt-merge (.value this) (.value other))
+                   #{(.value this) (.value other)}))))))
+
+(defn lpair [order value]
+  (->LPair order value))
 
 ;; Logical Clocks
 
@@ -461,25 +487,6 @@
 
 (defn dvvs-ctx [v]
   (-> v meta :ctx))
-
-;; From http://www.eecs.berkeley.edu/Pubs/TechRpts/2012/EECS-2012-167.pdf
-
-(defrecord LPair [clock value]
-  CRDT
-  (crdt-least [this]
-    (->LPair (crdt-least clock) (crdt-least value)))
-  (crdt-merge [this other]
-    (let [other ^LPair other]
-      (case (compare (.clock this) (.clock other))
-        (0 1) this
-        -1 other
-        (->LPair (crdt-merge (.clock this) (.clock other))
-                 (if (satisfies? CRDT (.value this))
-                   (crdt-merge (.value this) (.value other))
-                   #{(.value this) (.value other)}))))))
-
-(defn lpair [clock value]
-  (->LPair clock value))
 
 ;; SWIM: Scalable, Weakly Consistent, Infection-Style, Membership Protocol
 ;; http://www.cs.cornell.edu/~asdas/research/dsn02-swim.pdf
