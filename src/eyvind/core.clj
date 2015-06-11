@@ -317,7 +317,8 @@
 
 (defprotocol CRDT
   (crdt-least [_])
-  (crdt-merge [_ other]))
+  (crdt-merge [_ other])
+  (crdt-value [_]))
 
 (extend-protocol CRDT
   IPersistentMap
@@ -325,12 +326,17 @@
     (empty this))
   (crdt-merge [this other]
     (merge-with crdt-merge this other))
+  (crdt-value [this]
+    (into {} (for [[k v] this]
+               [k (crdt-value v)])))
 
   IPersistentSet
   (crdt-empty [this]
     (empty this))
   (crdt-merge [this other]
     (clojure.set/union this other))
+  (crdt-value [this]
+    this)
 
   IPersistentVector
   (crdt-least [this]
@@ -338,18 +344,24 @@
   (crdt-merge [this other]
     (assert (= (count this) (count other)))
     (mapv crdt-merge this other))
+  (crdt-value [this]
+    (mapv crdt-value this))
 
   Boolean
   (crdt-least [_]
     false)
   (crdt-merge [this other]
     (boolean (or this other)))
+  (crdt-value [this]
+    this)
 
   Long
   (crdt-least [_]
     0)
   (crdt-merge [this other]
-    (max (long this) (long other))))
+    (max (long this) (long other)))
+  (crdt-value [this]
+    this))
 
 ;; G-Counter CRDT
 
@@ -358,7 +370,9 @@
   (crdt-least [_]
     (->GCounter))
   (crdt-merge [this other]
-    (merge-with crdt-merge this other)))
+    (merge-with crdt-merge this other))
+  (crdt-value [this]
+    (reduce + (vals this))))
 
 (defn g-counter [node]
   (assoc (->GCounter) node 0))
@@ -375,9 +389,6 @@
   ([gc k delta]
    (crdt-merge gc (g-counter-inc-delta gc k delta))))
 
-(defn g-counter-value [gc]
-  (reduce + (vals gc)))
-
 ;; Roshi-style CRDT LWW set:
 ;; https://github.com/soundcloud/roshi
 
@@ -389,7 +400,9 @@
     (lww-set))
   (crdt-merge [this {:keys [adds removes]}]
     (let [x (reduce (partial apply lww-set-conj) this adds)]
-      (reduce (partial apply lww-set-disj) x removes))))
+      (reduce (partial apply lww-set-disj) x removes)))
+  (crdt-value [this]
+    (->> adds keys set)))
 
 (defn lww-set []
   (->LWWSet {} {}))
@@ -425,18 +438,20 @@
 (defn lww-set-contains? [{:keys [adds]} x]
   (contains? adds x))
 
-(defn lww-set-value [{:keys [adds]}]
-  (->> adds keys set))
-
-(declare or-set)
+(declare or-set or-set-contains?)
 
 (defrecord ORSet [adds removes]
   CRDT
   (crdt-least [this]
     (or-set))
-  (crdt-merge [this {:keys [adds removes]}] ;; TODO: this won't work for deltas
-    (->ORSet (crdt-merge (.adds this) adds)
-             (crdt-merge (.removes this) removes))))
+  (crdt-merge [this other]
+    (let [other ^ORSet other]
+      (->ORSet (crdt-merge (merge-with clojure.set/difference adds (.removes other)) (.adds other))
+               (crdt-merge removes (.removes other)))))
+  (crdt-value [this]
+    (->> (keys adds)
+         (filter (partial or-set-contains? this))
+         set)))
 
 (defn or-set []
   (->ORSet {} {}))
@@ -444,23 +459,24 @@
 (defn or-tag []
   (UUID/randomUUID))
 
-(defn or-set-conj [coll x]
-  (update-in coll [:adds x] clojure.set/union #{(or-tag)}))
+(defn or-set-conj-delta [coll x]
+  (update-in (or-set) [:adds x] clojure.set/union #{(or-tag)}))
 
-(defn or-set-disj [coll x]
-  (-> coll
-      (update-in [:adds] dissoc x)
-      (update-in [:removes x] clojure.set/union (get-in coll [:adds x]))))
+(defn or-set-conj [coll x]
+  (assoc-in coll [:adds x] #{(or-tag)}))
+
+(defn or-set-disj-delta [{:keys [adds]} x]
+  (cond-> (or-set)
+    (contains? adds x) (assoc-in [:removes x] (get adds x #{}))))
+
+(defn or-set-disj [{:keys [adds] :as coll} x]
+  (cond-> (update-in coll [:adds] dissoc x)
+    (contains? adds x) (update-in [:removes x] clojure.set/union (get adds x))))
 
 (defn or-set-contains? [{:keys [adds removes]} x]
   (->> (clojure.set/difference (adds x) (removes x))
        count
        pos?))
-
-(defn or-set-value [{:keys [adds] :as or-set}]
-  (->> (keys adds)
-       (filter (partial or-set-contains? or-set))
-       set))
 
 ;; From http://www.eecs.berkeley.edu/Pubs/TechRpts/2012/EECS-2012-167.pdf
 ;; And https://github.com:CBaquero/delta-enabled-crdts
@@ -478,6 +494,8 @@
                   (if (satisfies? CRDT (.value this))
                     (crdt-merge (.value this) (.value other))
                     #{(.value this) (.value other)})))))
+  (crdt-value [this]
+    value)
 
   Comparable
   (compareTo [this other]
@@ -485,9 +503,6 @@
 
 (defn lww-reg [order value]
   (->LWWReg order value))
-
-(defn lww-reg-value [^LWWReg reg]
-  (.value reg))
 
 ;; Logical Clocks
 
@@ -499,6 +514,8 @@
     (->VersionVector))
   (crdt-merge [this other]
     (merge-with crdt-merge this other))
+  (crdt-value [this]
+    this)
 
   ;; From Bud:
   ;;   # Return true if this map is strictly smaller than or equal to the given
@@ -551,6 +568,11 @@
                (take (+ (- n n') (count l')) l)
                (take (+ (- n' n) (count l)) l')))])
      this other))
+  (crdt-value [this]
+    (->> (for [[_ [_ l]] this]
+           l)
+         (apply concat)
+         vec))
 
   Comparable
   (compareTo [this other]
@@ -585,17 +607,11 @@
 (defn dvvs-event [dvvs vv r v]
   (crdt-merge dvvs (dvvs-event-delta dvvs vv r v)))
 
-(defn dvvs-values [dvvs]
-  (->> (for [[_ [_ l]] dvvs]
-         l)
-       (apply concat)
-       vec))
-
 ;; get/put interface, section 2 and 6 in dvvset-dais.pdf
 
 (defn dvvs-get [dvvs-map k]
   (when-let [dvvs (dvvs-map k)] ;; should get dvvs values from replicas and sync into this map
-    (with-meta (dvvs-values dvvs) {:ctx (dvvs-join dvvs)})))
+    (with-meta (crdt-value dvvs) {:ctx (dvvs-join dvvs)})))
 
 (defn dvvs-put [dvvs-map r k v ctx]
   (-> dvvs-map
@@ -661,10 +677,10 @@
     (println (meta get-a))
     (println (dvvs-put (dvvs-put dvvs-map :r :A :v2 {})  :r :A :v3 (dvvs-ctx get-a))))
 
-  (crdt-merge {:foo (lpair (vv :node1) #{:bar})
-               :boz (lpair (vv :node2) #{:foo})}
-              {:foo (lpair (vv :node1) #{:boz})
-               :boz (lpair (vv-event (vv :node1) :node1) #{:baz})})
+  (crdt-merge {:foo (lww-reg (vv :node1) #{:bar})
+               :boz (lww-reg (vv :node2) #{:foo})}
+              {:foo (lww-reg (vv :node1) #{:boz})
+               :boz (lww-reg (vv-event (vv :node1) :node1) #{:baz})})
 
   (with-open [context (zmq/context)]
     (zmq-server context)
