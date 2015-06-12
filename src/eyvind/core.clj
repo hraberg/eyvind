@@ -540,9 +540,9 @@
 
 (defn wall-clock []
   [(System/currentTimeMillis)
-   node-id
    (vswap! node-counter (fn [^BigInt n]
-                          (.add n 1N)))])
+                          (.add n 1N)))
+   node-id])
 
 ;; Version Vectors
 
