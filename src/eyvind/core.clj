@@ -85,7 +85,7 @@
 
 (defn remove-entry
   ([bc ^String k]
-   (remove-entry bc (wall-clock) k))
+   (remove-entry bc (System/currentTimeMillis) k))
   ([bc ^long ts ^String k]
     (let [key-bytes (str-bytes k)
           header-bytes (header ts (count key-bytes) tombstone-size)]
