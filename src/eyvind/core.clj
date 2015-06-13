@@ -67,7 +67,7 @@
 ;; TODO: consider using ByteArray/wrap instead of strings as keys in the keydir.
 (defn put-entry
   ([bc ^String k ^bytes v]
-   (put-entry bc (wall-clock) k v))
+   (put-entry bc (System/currentTimeMillis) k v))
   ([bc ^long ts ^String k ^bytes v]
    (let [key-bytes (str-bytes k)
          header-bytes (header ts (count key-bytes) (count v))
@@ -285,6 +285,11 @@
 ;;       http://arxiv.org/pdf/1410.2803.pdf
 ;;       http://www.eecs.berkeley.edu/Pubs/TechRpts/2012/EECS-2012-167.pdf
 
+(defprotocol CRDT
+  (crdt-least [_])
+  (crdt-merge [_ other])
+  (crdt-value [_]))
+
 (defn compare-> [x y]
   (pos? (compare x y)))
 
@@ -329,11 +334,6 @@
 (defn crdt-delta [x y]
   (some->> (deep-ordered-diff x y)
            (apply-deep-ordered-diff (crdt-least x))))
-
-(defprotocol CRDT
-  (crdt-least [_])
-  (crdt-merge [_ other])
-  (crdt-value [_]))
 
 (extend-protocol CRDT
   IPersistentMap
