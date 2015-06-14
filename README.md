@@ -1,3 +1,5 @@
+[<img width="215" src="https://github.com/hraberg/eyvind/raw/master/strandernas-svall.jpg" alt="Return to Ithaca" title="Return to Ithaca" align="right" />](https://en.wikipedia.org/wiki/Eyvind_Johnson)
+
 # Eyvind
 
 *for a narrative art, far-seeing in lands and ages, in the service of freedom*
