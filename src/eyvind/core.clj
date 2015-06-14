@@ -508,7 +508,7 @@
        pos?))
 
 ;; From http://www.eecs.berkeley.edu/Pubs/TechRpts/2012/EECS-2012-167.pdf
-;; And https://github.com:CBaquero/delta-enabled-crdts
+;; And https://github.com/CBaquero/delta-enabled-crdts
 
 (defrecord LWWReg [order value]
   CRDT

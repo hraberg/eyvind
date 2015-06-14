@@ -12,16 +12,25 @@ Foundations inspired by Riak Core. Higher level inspired by Dedalus, Linear Meld
 
 ## References
 
+### Dynamo / Riak
+
 http://basho.com/assets/bitcask-intro.pdf
+http://www.slideshare.net/eredmond/distributed-stat-structures
 http://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf
+
+### Constraint Handling Rules
 
 http://www.informatik.uni-ulm.de/pm/fileadmin/pm/home/fruehwirth/Papers/chr-lnai08.pdf
 https://lifeware.inria.fr/~tmartine/papers/martinez11chr.pdf
+
+### Distributed Datalog and Linear Logic
 
 http://db.cs.berkeley.edu/papers/datalog2011-dedalus.pdf
 http://www.eecs.berkeley.edu/Pubs/TechRpts/2012/EECS-2012-167.pdf
 https://www.andrew.cmu.edu/user/liminjia/research/papers/incremental-ppdp.pdf
 http://arxiv.org/pdf/1405.3556v1.pdf
+
+### Convergent and Commutative Replicated Data Types (CRDTs)
 
 http://hal.upmc.fr/inria-00555588/document
 http://www.infoq.com/articles/Highly-Distributed-Computations-Without-Synchronization
