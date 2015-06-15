@@ -414,6 +414,44 @@
   ([gc k delta]
    (crdt-merge gc (g-counter-inc-delta gc k delta))))
 
+;; PN-Counter CRDT
+
+(defrecord PNCounter [p n]
+  CRDT
+  (crdt-least [_]
+    (->PNCounter (->GCounter) (->GCounter)))
+  (crdt-merge [this other]
+    (merge-with crdt-merge this other))
+  (crdt-value [this]
+    (- (long (crdt-value p)) (long (crdt-value n)))))
+
+(defn pn-counter [node]
+  (->PNCounter (g-counter node) (g-counter node)))
+
+(defn pn-counter-inc-delta
+  ([pn k]
+   (pn-counter-inc-delta pn k 1))
+  ([pn k ^long delta]
+   (assoc (crdt-least pn) :p (g-counter-inc-delta (:p pn) k delta))))
+
+(defn pn-counter-inc
+  ([pn k]
+   (pn-counter-inc pn k 1))
+  ([pn k delta]
+   (crdt-merge pn (pn-counter-inc-delta pn k delta))))
+
+(defn pn-counter-dec-delta
+  ([pn k]
+   (pn-counter-dec-delta pn k 1))
+  ([pn k ^long delta]
+   (assoc (crdt-least pn) :n (g-counter-inc-delta (:n pn) k delta))))
+
+(defn pn-counter-dec
+  ([gc k]
+   (pn-counter-dec gc k 1))
+  ([pn k delta]
+   (crdt-merge pn (pn-counter-dec-delta pn k delta))))
+
 ;; Roshi-style CRDT LWW set:
 ;; https://github.com/soundcloud/roshi
 
