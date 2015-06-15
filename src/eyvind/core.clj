@@ -640,6 +640,7 @@
   ;;   # map. "x" is strictly smaller than or equal to "y" if:
   ;;   #     (a) every key in "x"  also appears in "y"
   ;;   #     (b) for every key k in "x", x[k] <= y[k]
+  ;; TODO: This is somewhat broken, needs fix.
   Comparable
   (compareTo [this other]
     (let [x (map->VersionVector (select-keys this (keys other)))
