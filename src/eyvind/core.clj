@@ -593,13 +593,14 @@
     (->LWWReg (crdt-least ts) (crdt-least value)))
   (crdt-merge [this other]
     (case (compare this other)
-      (0 1) this
+      1 this
       -1 other
       (let [other ^LWWReg other]
         (->LWWReg (crdt-merge ts (.ts other))
-                  (if (satisfies? CRDT value)
-                    (crdt-merge value (.value other))
-                    #{value (.value other)})))))
+                  (cond
+                    (satisfies? CRDT value) (crdt-merge value (.value other))
+                    (= value (.value other)) value
+                    :else #{value (.value other)})))))
   (crdt-value [this]
     value)
 
