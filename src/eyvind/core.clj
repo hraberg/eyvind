@@ -640,18 +640,21 @@
   ;;   #     (b) for every key k in "x", x[k] <= y[k]
   Comparable
   (compareTo [this other]
-    (let [x (map->VersionVector (select-keys this (keys other)))]
+    (let [x (map->VersionVector (select-keys this (keys other)))
+          lt (fn [x y]
+               (some->> (merge-with compare-> x y)
+                        vals
+                        (remove number?)
+                        seq
+                        (every? false?)))]
       (cond
         (and (= x other)
              (> (count this) (count other))) 1
         (= this other) 0
-        (some->> (merge-with compare-> x other)
-                 vals
-                 (remove number?)
-                 seq
-                 (every? true?)) 1
-        (not= (keys this) (keys other)) Integer/MIN_VALUE ;; hack to represent non-overlapping values.
-        :else -1))))
+        (lt x other) -1
+        (lt other x) 1
+        ;; hack to represent non-overlapping values. Throw CME?
+        :else Integer/MIN_VALUE))))
 
 (defn vv [node]
   (assoc (->VersionVector) node 0))
