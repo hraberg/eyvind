@@ -11,7 +11,7 @@
    [java.net InetAddress NetworkInterface]
    [java.nio ByteBuffer ByteOrder]
    [java.security MessageDigest]
-   [java.util LinkedHashMap UUID]
+   [java.util ConcurrentModificationException LinkedHashMap UUID]
    [java.util.zip CRC32]))
 
 (defrecord DiskStore [keydir sync? ^long growth-factor ^MappedFile log])
@@ -592,15 +592,17 @@
   (crdt-least [this]
     (->LWWReg (crdt-least ts) (crdt-least value)))
   (crdt-merge [this other]
-    (case (compare this other)
-      1 this
-      -1 other
-      (let [other ^LWWReg other]
-        (->LWWReg (crdt-merge ts (.ts other))
-                  (cond
-                    (satisfies? CRDT value) (crdt-merge value (.value other))
-                    (= value (.value other)) value
-                    :else #{value (.value other)})))))
+    (try
+      (if (compare-> other this)
+        other
+        this)
+      (catch ConcurrentModificationException _
+        (let [other ^LWWReg other]
+          (->LWWReg (crdt-merge ts (.ts other))
+                    (cond
+                      (satisfies? CRDT value) (crdt-merge value (.value other))
+                      (= value (.value other)) value
+                      :else #{value (.value other)}))))))
   (crdt-value [this]
     value)
 
@@ -654,7 +656,7 @@
         (lt x other) -1
         (lt other x) 1
         ;; hack to represent non-overlapping values. Throw CME?
-        :else Integer/MIN_VALUE))))
+        :else (throw (ConcurrentModificationException.))))))
 
 (defn vv [node]
   (assoc (->VersionVector) node 0))
