@@ -446,7 +446,7 @@
 
 (defn lww-set-conj-delta [coll x ts]
   (cond-> (lww-set)
-    (lww-new-timestamp? coll x ts) (-> (update-in [:adds] assoc x ts))))
+    (lww-new-timestamp? coll x ts) (-> (assoc-in [:adds x] x ts))))
 
 (defn lww-set-conj
   ([coll x]
@@ -456,7 +456,7 @@
 
 (defn lww-set-disj-delta [coll x ts]
   (cond-> (lww-set)
-    (lww-new-timestamp? coll x ts) (-> (update-in [:removes] assoc x ts))))
+    (lww-new-timestamp? coll x ts) (-> (assoc-in [:removes x] x ts))))
 
 (defn lww-set-disj
   ([coll x]
@@ -488,11 +488,11 @@
 (defn or-tag []
   (UUID/randomUUID))
 
-(defn or-set-conj-delta [coll x]
-  (update-in (or-set) [:adds x] clojure.set/union #{(or-tag)}))
+(defn or-set-conj-delta [{:keys [adds]} x]
+  (assoc-in (or-set) [:adds x] #{(or-tag)}))
 
 (defn or-set-conj [coll x]
-  (assoc-in coll [:adds x] #{(or-tag)}))
+  (update-in coll [:adds x] clojure.set/union #{(or-tag)}))
 
 (defn or-set-disj-delta [{:keys [adds]} x]
   (cond-> (or-set)
