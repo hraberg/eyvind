@@ -548,16 +548,16 @@
 ;; From http://www.eecs.berkeley.edu/Pubs/TechRpts/2012/EECS-2012-167.pdf
 ;; And https://github.com/CBaquero/delta-enabled-crdts
 
-(defrecord LWWReg [order value]
+(defrecord LWWReg [ts value]
   CRDT
   (crdt-least [this]
-    (->LWWReg (crdt-least order) (crdt-least value)))
+    (->LWWReg (crdt-least ts) (crdt-least value)))
   (crdt-merge [this other]
     (case (compare this other)
       (0 1) this
       -1 other
       (let [other ^LWWReg other]
-        (->LWWReg (crdt-merge order (.order other))
+        (->LWWReg (crdt-merge ts (.ts other))
                   (if (satisfies? CRDT value)
                     (crdt-merge value (.value other))
                     #{value (.value other)})))))
@@ -566,10 +566,10 @@
 
   Comparable
   (compareTo [this other]
-    (compare order (.order ^LWWReg other))))
+    (compare ts (.ts ^LWWReg other))))
 
-(defn lww-reg [order value]
-  (->LWWReg order value))
+(defn lww-reg [ts value]
+  (->LWWReg ts value))
 
 ;; Logical Clocks
 
