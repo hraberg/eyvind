@@ -397,7 +397,11 @@
   (crdt-merge [this other]
     (merge-with crdt-merge this other))
   (crdt-value [this]
-    (reduce + (vals this))))
+    (reduce + (vals this)))
+
+  Comparable
+  (compareTo [this other]
+    (compare (crdt-value this) (crdt-value other))))
 
 (defn g-counter [node]
   (assoc (->GCounter) node 0))
@@ -423,7 +427,11 @@
   (crdt-merge [this other]
     (merge-with crdt-merge this other))
   (crdt-value [this]
-    (- (long (crdt-value p)) (long (crdt-value n)))))
+    (- (long (crdt-value p)) (long (crdt-value n))))
+
+  Comparable
+  (compareTo [this other]
+    (compare (crdt-value this) (crdt-value other))))
 
 (defn pn-counter [node]
   (->PNCounter (g-counter node) (g-counter node)))
@@ -462,7 +470,11 @@
   (crdt-merge [this other]
     (merge-with crdt-merge this other))
   (crdt-value [this]
-    (> (long (crdt-value enable)) (long (crdt-value disable)))))
+    (> (long (crdt-value enable)) (long (crdt-value disable))))
+
+  Comparable
+  (compareTo [this other]
+    (compare (crdt-value this) (crdt-value other))))
 
 (defn flag [node]
   (->Flag (g-counter node) (g-counter node)))
