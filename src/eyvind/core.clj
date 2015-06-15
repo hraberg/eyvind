@@ -519,16 +519,16 @@
       (0 1) this
       -1 other
       (let [other ^LWWReg other]
-        (->LWWReg (crdt-merge (.order this) (.order other))
-                  (if (satisfies? CRDT (.value this))
-                    (crdt-merge (.value this) (.value other))
-                    #{(.value this) (.value other)})))))
+        (->LWWReg (crdt-merge order (.order other))
+                  (if (satisfies? CRDT value)
+                    (crdt-merge value (.value other))
+                    #{value (.value other)})))))
   (crdt-value [this]
     value)
 
   Comparable
   (compareTo [this other]
-    (compare (.order this) (.order ^LWWReg other))))
+    (compare order (.order ^LWWReg other))))
 
 (defn lww-reg [order value]
   (->LWWReg order value))
