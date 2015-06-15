@@ -452,6 +452,33 @@
   ([pn k delta]
    (crdt-merge pn (pn-counter-dec-delta pn k delta))))
 
+;; Flag CRDT
+;; TODO: Can we split out the map vs value stuff for all these CRDTs?
+
+(defrecord Flag [enable disable]
+  CRDT
+  (crdt-least [_]
+    (->Flag (->GCounter) (->GCounter)))
+  (crdt-merge [this other]
+    (merge-with crdt-merge this other))
+  (crdt-value [this]
+    (> (long (crdt-value enable)) (long (crdt-value disable)))))
+
+(defn flag [node]
+  (->Flag (g-counter node) (g-counter node)))
+
+(defn flag-enable-delta [flag k]
+  (assoc (crdt-least flag) :enable (g-counter-inc-delta (:enable flag) k)))
+
+(defn flag-enable [flag k]
+  (crdt-merge flag (flag-enable-delta flag k)))
+
+(defn flag-disable-delta [flag k]
+  (assoc (crdt-least flag) :disable (g-counter-inc-delta (:disable flag) k)))
+
+(defn flag-disable [flag k]
+  (crdt-merge flag (flag-disable-delta flag k)))
+
 ;; Roshi-style CRDT LWW set:
 ;; https://github.com/soundcloud/roshi
 
