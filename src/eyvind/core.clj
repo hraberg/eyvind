@@ -626,6 +626,18 @@
 
 ;; Version Vectors
 
+;; From Bud:
+;;   # Return true if this map is strictly smaller than or equal to the given
+;;   # map. "x" is strictly smaller than or equal to "y" if:
+;;   #     (a) every key in "x"  also appears in "y"
+;;   #     (b) for every key k in "x", x[k] <= y[k]
+(defn vv-< [x y]
+  (let [y (map->VersionVector (select-keys y (keys x)))]
+    (and (= (count x) (count y))
+         (some->> (merge-with compare-> x y)
+                  vals
+                  (every? false?)))))
+
 (defrecord VersionVector []
   CRDT
   (crdt-least [_]
@@ -635,29 +647,14 @@
   (crdt-value [this]
     this)
 
-  ;; From Bud:
-  ;;   # Return true if this map is strictly smaller than or equal to the given
-  ;;   # map. "x" is strictly smaller than or equal to "y" if:
-  ;;   #     (a) every key in "x"  also appears in "y"
-  ;;   #     (b) for every key k in "x", x[k] <= y[k]
-  ;; TODO: This is somewhat broken, needs fix.
   Comparable
   (compareTo [this other]
-    (let [x (map->VersionVector (select-keys this (keys other)))
-          lt (fn [x y]
-               (some->> (merge-with compare-> x y)
-                        vals
-                        (remove number?)
-                        seq
-                        (every? false?)))]
-      (cond
-        (and (= x other)
-             (> (count this) (count other))) 1
-        (= this other) 0
-        (lt x other) -1
-        (lt other x) 1
-        ;; hack to represent non-overlapping values. Throw CME?
-        :else (throw (ConcurrentModificationException.))))))
+    (cond
+      (= this other) 0
+      (and (>= (count this) (count other))
+           (vv-< other this)) 1
+      (vv-< this other) -1
+      :else (throw (ConcurrentModificationException.)))))
 
 (defn vv [node]
   (assoc (->VersionVector) node 0))
