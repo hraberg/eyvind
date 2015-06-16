@@ -613,6 +613,10 @@
 (defn lww-reg [ts value]
   (->LWWReg ts value))
 
+;; TODO: implement Logoot:
+;;       https://hal.archives-ouvertes.fr/inria-00432368/document
+;;       https://github.com/bnoguchi/logoot
+
 ;; Logical Clocks
 
 (def ^:dynamic *node-id* (long (biginteger (mac-address))))
