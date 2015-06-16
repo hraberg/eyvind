@@ -600,8 +600,8 @@
         (let [other ^LWWReg other]
           (->LWWReg (crdt-merge ts (.ts other))
                     (cond
-                      (satisfies? CRDT value) (crdt-merge value (.value other))
                       (= value (.value other)) value
+                      (satisfies? CRDT value) (crdt-merge value (.value other))
                       :else #{value (.value other)}))))))
   (crdt-value [this]
     value)
