@@ -299,6 +299,9 @@
 
 ;; Speculative spike trying to deduct the delta from the structure before/after modification.
 ;; This should be part if the CRDT protocol if it works instead of cond hacks.
+;; TODO: Actually, we should replace all updates with delta-fn + crdt-merge instead, cleaner.
+;;       Local replica simply gets updated via crdt-merge like the others.
+;;       There will be a high level API, similar to riak_dt that hides this.
 (defn deep-ordered-diff [x y]
   (cond
     (vector? x) (with-meta
