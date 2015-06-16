@@ -293,51 +293,6 @@
 (defn compare-> [x y]
   (pos? (compare x y)))
 
-(defn should-diff? [x y]
-  (or (not (instance? Comparable x))
-      (compare-> x y)))
-
-;; Speculative spike trying to deduct the delta from the structure before/after modification.
-;; This should be part if the CRDT protocol if it works instead of cond hacks.
-;; TODO: Actually, we should replace all updates with delta-fn + crdt-merge instead, cleaner.
-;;       Local replica simply gets updated via crdt-merge like the others.
-;;       There will be a high level API, similar to riak_dt that hides this.
-(defn deep-ordered-diff [x y]
-  (cond
-    (vector? x) (with-meta
-                  (deep-ordered-diff (into {} (map-indexed vector x))
-                                     (into {} (map-indexed vector y)))
-                  {:vector true})
-    (map? x) (some->> (for [[k v] y
-                            :let [v' (get x k)]
-                            :when (should-diff? v v')]
-                        [k (deep-ordered-diff v' v)])
-                      (remove (comp nil? second))
-                      seq
-                      (into (crdt-least x)))
-    (set? x) (some-> (clojure.set/difference y x) seq set)
-    :else (if (compare-> x y) x y)))
-
-(defn apply-deep-ordered-diff [x diff]
-  (cond
-    (map? diff) (reduce (fn [x [k v]]
-                          (let [v' (get x k)]
-                            (if (should-diff? v v')
-                              (assoc x k (apply-deep-ordered-diff v' v))
-                              x)))
-                        (or x (if (-> diff meta :vector)
-                                (vec (repeat (apply max (keys diff)) nil))
-                                (crdt-least diff)))
-                        diff)
-    (set? diff) (clojure.set/union x diff)
-    (nil? diff) x
-    (compare-> x diff) x
-    :else diff))
-
-(defn crdt-delta [x y]
-  (some->> (deep-ordered-diff x y)
-           (apply-deep-ordered-diff (crdt-least x))))
-
 (extend-protocol CRDT
   IPersistentMap
   (crdt-least [this]
@@ -388,6 +343,14 @@
     (if (pos? (compare this other))
       this
       other))
+  (crdt-value [this]
+    this)
+
+  nil
+  (crdt-least [_]
+    nil)
+  (crdt-merge [_ other]
+    other)
   (crdt-value [this]
     this))
 
@@ -497,15 +460,23 @@
 ;; Roshi-style CRDT LWW set:
 ;; https://github.com/soundcloud/roshi
 
-(declare lww-set lww-set-conj lww-set-disj wall-clock)
+(declare lww-set wall-clock)
+
+(defn lww-new-timestamp? [{:keys [adds removes] :as coll} x ts]
+  (compare-> ts (or (adds x) (removes x))))
+
+(defn lww-set-update [from to coll x ts]
+  (cond-> coll
+    (lww-new-timestamp? coll x ts) (-> (update-in [from] dissoc x)
+                                       (update-in [to] assoc x ts))))
 
 (defrecord LWWSet [adds removes]
   CRDT
   (crdt-least [this]
     (lww-set))
   (crdt-merge [this {:keys [adds removes]}]
-    (let [x (reduce (partial apply lww-set-conj) this adds)]
-      (reduce (partial apply lww-set-disj) x removes)))
+    (let [x (reduce (partial apply lww-set-update :removes :adds) this adds)]
+      (reduce (partial apply lww-set-update :adds :removes) x removes)))
   (crdt-value [this]
     (->> adds
          keys
@@ -516,33 +487,25 @@
 (defn lww-set []
   (->LWWSet {} {}))
 
-(defn lww-new-timestamp? [{:keys [adds removes] :as coll} x ts]
-  (compare-> ts (or (adds x) (removes x))))
-
-(defn lww-set-update [coll x ts from to]
-  (cond-> coll
-    (lww-new-timestamp? coll x ts) (-> (update-in [from] dissoc x)
-                                       (update-in [to] assoc x ts))))
-
 (defn lww-set-conj-delta [coll x ts]
   (cond-> (lww-set)
-    (lww-new-timestamp? coll x ts) (-> (assoc-in [:adds x] x ts))))
+    (lww-new-timestamp? coll x ts) (-> (assoc-in [:adds x] ts))))
 
 (defn lww-set-conj
   ([coll x]
    (lww-set-conj coll x (wall-clock)))
   ([coll x ts]
-   (lww-set-update coll x ts :removes :adds)))
+   (crdt-merge coll (lww-set-conj-delta coll x ts))))
 
 (defn lww-set-disj-delta [coll x ts]
   (cond-> (lww-set)
-    (lww-new-timestamp? coll x ts) (-> (assoc-in [:removes x] x ts))))
+    (lww-new-timestamp? coll x ts) (-> (assoc-in [:removes x] ts))))
 
 (defn lww-set-disj
   ([coll x]
    (lww-set-disj coll x (wall-clock)))
   ([coll x ts]
-   (lww-set-update coll x ts :adds :removes)))
+   (crdt-merge coll (lww-set-disj-delta coll x ts))))
 
 (defn lww-set-contains? [{:keys [adds]} x]
   (contains? adds x))
@@ -572,15 +535,14 @@
   (assoc-in (or-set) [:adds x] #{(or-tag)}))
 
 (defn or-set-conj [coll x]
-  (update-in coll [:adds x] clojure.set/union #{(or-tag)}))
+  (crdt-merge coll (or-set-conj-delta coll x)))
 
 (defn or-set-disj-delta [{:keys [adds]} x]
   (cond-> (or-set)
-    (contains? adds x) (assoc-in [:removes x] (get adds x #{}))))
+    (contains? adds x) (assoc-in [:removes x] (get adds x))))
 
-(defn or-set-disj [{:keys [adds] :as coll} x]
-  (cond-> (update-in coll [:adds] dissoc x)
-    (contains? adds x) (update-in [:removes x] clojure.set/union (get adds x))))
+(defn or-set-disj [coll x]
+  (crdt-merge coll (or-set-disj-delta coll x)))
 
 (defn or-set-contains? [{:keys [adds removes]} x]
   (->> (clojure.set/difference (adds x) (removes x))
@@ -684,7 +646,7 @@
   ([vv]
    (vv-event vv *node-id*))
   ([vv node]
-   (g-counter-inc vv node)))
+   (crdt-merge vv (vv-event-delta vv node))))
 
 (defn vv-dominates? [x y]
   (compare-> x y))
