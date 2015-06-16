@@ -462,8 +462,11 @@
 
 (declare lww-set wall-clock)
 
-(defn lww-new-timestamp? [{:keys [adds removes] :as coll} x ts]
-  (compare-> ts (or (adds x) (removes x))))
+(defn lww-timestamp [{:keys [adds removes] :as coll} x]
+  (or (adds x) (removes x)))
+
+(defn lww-new-timestamp? [coll x ts]
+  (compare-> ts (lww-timestamp coll x)))
 
 (defn lww-set-update [from to coll x ts]
   (cond-> coll
@@ -510,16 +513,19 @@
 (defn lww-set-contains? [{:keys [adds]} x]
   (contains? adds x))
 
-(declare lww-map)
+(declare lww-map lww-reg)
 
 (defrecord LWWMap [key-set storage]
   CRDT
   (crdt-least [this]
     (lww-map))
-  (crdt-merge [this {:keys [key-set storage]}]
-    (let [key-set (crdt-merge (.key-set this) key-set)]
-      (->LWWMap key-set (crdt-merge (select-keys (.storage this) (crdt-value key-set))
-                                    (select-keys storage (crdt-value key-set))))))
+  (crdt-merge [this other]
+    (let [new-key-set (crdt-merge (.key-set this) (.key-set ^LWWMap other))
+          lww-regs (fn [^LWWMap lww-map]
+                     (into {} (for [k (crdt-value new-key-set)]
+                                [k (lww-reg (lww-timestamp (.key-set lww-map) k)
+                                            (get (.storage lww-map) k))])))]
+      (->LWWMap new-key-set (crdt-value (crdt-merge (lww-regs this) (lww-regs other))))))
   (crdt-value [this]
     (crdt-value storage)))
 
