@@ -790,6 +790,14 @@
               {:foo (lww-reg (vv :node1) #{:boz})
                :boz (lww-reg (vv-event (vv :node1) :node1) #{:baz})})
 
+  (-> (lww-set)
+      (lww-set-conj :a 1)
+      (lww-set-conj :b 2)
+      (lww-set-disj :c 3)
+      (lww-set-conj :d 4)
+      (lww-set-disj :d 5)
+      (lww-set-disj :d 6))
+
   (with-open [context (zmq/context)]
     (zmq-server context)
     @(zmq-client context)))
