@@ -615,14 +615,20 @@
 
 ;; Logical Clocks
 
-(defonce node-id (long (biginteger (mac-address))))
-(defonce node-counter (volatile! 0N))
+(def ^:dynamic *node-id* (long (biginteger (mac-address))))
+(defonce node-counter (volatile! {}))
 
-(defn wall-clock []
-  [(System/currentTimeMillis)
-   (vswap! node-counter (fn [^BigInt n]
-                          (.add n 1N)))
-   node-id])
+(defn next-node-count
+  ([]
+   (next-node-count node-counter *node-id*))
+  ([node-counter node-id]
+   (get (vswap! node-counter update-in [node-id] (fnil inc 0)) node-id)))
+
+(defn wall-clock
+  ([]
+   (wall-clock *node-id*))
+  ([node-id]
+   [(System/currentTimeMillis) (next-node-count node-counter node-id) node-id]))
 
 ;; Version Vectors
 
@@ -655,14 +661,23 @@
       (vv-< this other) -1
       :else (throw (ConcurrentModificationException.)))))
 
-(defn vv [node]
-  (assoc (->VersionVector) node 0))
+(defn vv
+  ([]
+   (vv node-id))
+  ([node]
+   (assoc (->VersionVector) node 0)))
 
-(defn vv-event-delta [vv node]
-  (g-counter-inc-delta vv node))
+(defn vv-event-delta
+  ([vv]
+   (vv-event-delta vv *node-id*))
+  ([vv node]
+   (g-counter-inc-delta vv node)))
 
-(defn vv-event [vv node]
-  (g-counter-inc vv node))
+(defn vv-event
+  ([vv]
+   (vv-event vv *node-id*))
+  ([vv node]
+   (g-counter-inc vv node)))
 
 (defn vv-dominates? [x y]
   (compare-> x y))
@@ -712,18 +727,24 @@
          [r [n (vec (take (- n (long (get vv r 0))) l))]])
        (into (->DVVSet))))
 
-(defn dvvs-event-delta [dvvs vv r v]
-  (->> (for [[i [^long n l]] dvvs
-             :let [ts (get vv i 0)]]
-         (if (= i r)
-           [i [(inc n) (vec (cons v l))]]
-           (when (compare-> ts n)
-             [ts l])))
-       (remove nil?)
-       (into (assoc (->DVVSet) r [(get vv r 0) [v]]))))
+(defn dvvs-event-delta
+  ([dvvs vv v]
+   (dvvs-event-delta dvvs vv *node-id* v))
+  ([dvvs vv r v]
+    (->> (for [[i [^long n l]] dvvs
+               :let [ts (get vv i 0)]]
+           (if (= i r)
+             [i [(inc n) (vec (cons v l))]]
+             (when (compare-> ts n)
+               [ts l])))
+         (remove nil?)
+         (into (assoc (->DVVSet) r [(get vv r 0) [v]])))))
 
-(defn dvvs-event [dvvs vv r v]
-  (crdt-merge dvvs (dvvs-event-delta dvvs vv r v)))
+(defn dvvs-event
+  ([dvvs vv v]
+   (dvvs-event vv *node-id* v))
+  ([dvvs vv r v]
+   (crdt-merge dvvs (dvvs-event-delta dvvs vv r v))))
 
 ;; get/put interface, section 2 and 6 in dvvset-dais.pdf
 
