@@ -513,19 +513,17 @@
 (defn lww-set-contains? [{:keys [adds]} x]
   (contains? adds x))
 
-(declare lww-map lww-reg)
+(declare lww-map lww-reg lww-map-as-reg-map)
 
 (defrecord LWWMap [key-set storage]
   CRDT
   (crdt-least [this]
     (lww-map))
   (crdt-merge [this other]
-    (let [new-key-set (crdt-merge (.key-set this) (.key-set ^LWWMap other))
-          lww-regs (fn [^LWWMap lww-map]
-                     (into {} (for [k (crdt-value new-key-set)]
-                                [k (lww-reg (lww-set-timestamp (.key-set lww-map) k)
-                                            (get (.storage lww-map) k))])))]
-      (->LWWMap new-key-set (crdt-value (crdt-merge (lww-regs this) (lww-regs other))))))
+    (let [new-key-set (crdt-merge (.key-set this) (.key-set ^LWWMap other))]
+      (->LWWMap new-key-set (select-keys (crdt-value (crdt-merge (lww-map-as-reg-map this)
+                                                                 (lww-map-as-reg-map other)))
+                                         (crdt-value new-key-set)))))
   (crdt-value [this]
     (crdt-value storage)))
 
@@ -560,6 +558,11 @@
 (defn lww-map-get [{:keys [storage] :as coll} x]
   (when (lww-map-contains? coll x)
     (get storage x)))
+
+(defn lww-map-as-reg-map [^LWWMap lww-map]
+  (->> (for [[k v] (.storage lww-map)]
+         [k (lww-reg (lww-set-timestamp (.key-set lww-map) k) v)])
+       (into {})))
 
 (declare or-set or-set-contains?)
 
