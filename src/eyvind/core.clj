@@ -510,6 +510,51 @@
 (defn lww-set-contains? [{:keys [adds]} x]
   (contains? adds x))
 
+(declare lww-map)
+
+(defrecord LWWMap [key-set storage]
+  CRDT
+  (crdt-least [this]
+    (lww-map))
+  (crdt-merge [this {:keys [key-set storage]}]
+    (let [key-set (crdt-merge (.key-set this) key-set)]
+      (->LWWMap key-set (crdt-merge (select-keys (.storage this) (crdt-value key-set))
+                                    (select-keys storage (crdt-value key-set))))))
+  (crdt-value [this]
+    (crdt-value storage)))
+
+(defn lww-map []
+  (->LWWMap (lww-set) {}))
+
+(defn lww-map-assoc-delta [{:keys [key-set] :as coll} k v ts]
+  (let [delta (lww-set-conj-delta key-set k ts)]
+    (cond-> (lww-map)
+      (get-in delta [:adds k]) (assoc :key-set delta :storage {k v}))))
+
+(defn lww-map-assoc
+  ([coll k v]
+   (lww-map-assoc coll k v (wall-clock)))
+  ([coll k v ts]
+   (crdt-merge coll (lww-map-assoc-delta coll k v ts))))
+
+(defn lww-map-dissoc-delta [{:keys [key-set] :as coll} k ts]
+  (let [delta (lww-set-disj-delta key-set k ts)]
+    (cond-> (lww-map)
+      (get-in delta [:removes k]) (assoc :key-set delta))))
+
+(defn lww-map-dissoc
+  ([coll k]
+   (lww-map-dissoc coll k (wall-clock)))
+  ([coll k ts]
+   (crdt-merge coll (lww-map-dissoc-delta coll k ts))))
+
+(defn lww-map-contains? [{:keys [key-set]} x]
+  (lww-set-contains? key-set x))
+
+(defn lww-map-get [{:keys [storage] :as coll} x]
+  (when (lww-map-contains? coll x)
+    (get storage x)))
+
 (declare or-set or-set-contains?)
 
 (defrecord ORSet [adds removes]
