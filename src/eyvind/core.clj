@@ -632,11 +632,11 @@
 ;;   #     (a) every key in "x"  also appears in "y"
 ;;   #     (b) for every key k in "x", x[k] <= y[k]
 (defn vv-< [x y]
-  (let [y (map->VersionVector (select-keys y (keys x)))]
+  (let [y (select-keys y (keys x))]
     (and (= (count x) (count y))
-         (some->> (merge-with compare-> x y)
-                  vals
-                  (every? false?)))))
+         (->> (merge-with compare-> x y)
+              vals
+              (every? false?)))))
 
 (defrecord VersionVector []
   CRDT
@@ -651,8 +651,7 @@
   (compareTo [this other]
     (cond
       (= this other) 0
-      (and (>= (count this) (count other))
-           (vv-< other this)) 1
+      (vv-< other this) 1
       (vv-< this other) -1
       :else (throw (ConcurrentModificationException.)))))
 
