@@ -365,6 +365,7 @@
 ;; Also, Handoff-counters, allows tiers of CRDTs so clients can use them without clock explosion:
 ;; http://arxiv.org/pdf/1307.3207v1.pdf
 ;; https://github.com/pssalmeida/clj-crdt
+;; This paper makes an unrelated point about batching fsyncs and only send deltas which has been written.
 
 (defrecord GCounter []
   CRDT
