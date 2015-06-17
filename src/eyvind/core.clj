@@ -801,6 +801,9 @@
 ;; https://speakerd.s3.amazonaws.com/presentations/5d140b302fbf01327e4e42c106afd3ef/2014-SWIM.pdf
 ;; https://github.com/hashicorp/memberlist
 ;; 200ms gossip, 1s failure
+;; See also:
+;; http://bitsavers.informatik.uni-stuttgart.de/pdf/xerox/parc/techReports/CSL-89-1_Epidemic_Algorithms_for_Replicated_Database_Maintenance.pdf
+;; http://czmq.zeromq.org/manual:zgossip
 
 ;; ZeroMQ
 
