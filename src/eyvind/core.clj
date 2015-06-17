@@ -356,7 +356,8 @@
 
 ;; G-Counter CRDT
 ;; This is a idempotent commutative monoid, see:
-;;  http://noelwelsh.com/assets/downloads/scala-exchange-2013-crdt.pdf
+;; http://noelwelsh.com/assets/downloads/scala-exchange-2013-crdt.pdf
+;; In Haskell's Data.Monoid, least is called empty and merge append.
 
 (defrecord GCounter []
   CRDT
