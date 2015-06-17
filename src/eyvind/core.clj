@@ -365,6 +365,8 @@
 ;; Also, Handoff-counters, allows tiers of CRDTs so clients can use them without clock explosion:
 ;; http://arxiv.org/pdf/1307.3207v1.pdf
 ;; https://github.com/pssalmeida/clj-crdt
+;; The more general point around protocols / evolving processes:
+;; "We have presented a solution to ECDC, called Handoff Counters, that adopts the CRDT philosophy, making the “protocol” state be a part of the CRDT state."
 ;; This paper makes an unrelated point about batching fsyncs and only send deltas which has been written.
 
 (defrecord GCounter []
