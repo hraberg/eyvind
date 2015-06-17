@@ -355,6 +355,8 @@
     this))
 
 ;; G-Counter CRDT
+;; This is a idempotent commutative monoid, see:
+;;  http://noelwelsh.com/assets/downloads/scala-exchange-2013-crdt.pdf
 
 (defrecord GCounter []
   CRDT
@@ -385,6 +387,7 @@
    (crdt-merge gc (g-counter-inc-delta gc k delta))))
 
 ;; PN-Counter CRDT
+;; This is a commutative group.
 
 (defrecord PNCounter [p n]
   CRDT
