@@ -481,7 +481,7 @@
   (or (adds x) (removes x)))
 
 (defn lww-set-new-timestamp? [coll x ts]
-  (compare-> ts (lww-timestamp coll x)))
+  (compare-> ts (lww-set-timestamp coll x)))
 
 (defn lww-set-update [from to coll x ts]
   (cond-> coll
@@ -527,6 +527,15 @@
 
 (defn lww-set-contains? [{:keys [adds]} x]
   (contains? adds x))
+
+(defn lww-set-after [{:keys [adds removes] :as coll} ts]
+  (reduce
+   (fn [coll x]
+     (cond-> coll
+       (lww-set-new-timestamp? coll x ts) (-> (update-in [:adds] dissoc x)
+                                              (update-in [:removes] dissoc x))))
+   coll
+   (concat (keys adds) (keys removes))))
 
 (declare lww-map lww-reg lww-map-as-reg-map)
 
@@ -706,7 +715,7 @@
 
 (defn vv
   ([]
-   (vv node-id))
+   (vv *node-id*))
   ([node]
    (assoc (->VersionVector) node 0)))
 
