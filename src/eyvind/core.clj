@@ -358,6 +358,9 @@
 ;; This is a idempotent commutative monoid, see:
 ;; http://noelwelsh.com/assets/downloads/scala-exchange-2013-crdt.pdf
 ;; In Haskell's Data.Monoid, least is called empty and merge append.
+;; "A semilattice is a commutative semigroup S in which every element x is idempotent, that is, x + x = x"
+;; "The algebraic preordering on S is then an ordering, given by x ≤ y if and only if x + y = y, hence all our semilattices are join-semilattices."
+;; "A 0-semilattice is a semilattice which is also a monoid, or, equivalently, a semilattice which has a least element."
 
 (defrecord GCounter []
   CRDT
