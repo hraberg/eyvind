@@ -389,6 +389,7 @@
 
 ;; PN-Counter CRDT
 ;; This is a commutative group.
+;; A group is a monoid with an inverse element, that is it can do negation, not subtraction, there's still only one merge.
 
 (defrecord PNCounter [p n]
   CRDT
