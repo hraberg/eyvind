@@ -388,7 +388,7 @@
    (crdt-merge gc (g-counter-inc-delta gc k delta))))
 
 ;; PN-Counter CRDT
-;; This is a commutative group.
+;; This is a commutative group, aka an abelian group.
 ;; A group is a monoid with an inverse element, that is it can do negation, not subtraction, there's still only one merge.
 
 (defrecord PNCounter [p n]
