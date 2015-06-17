@@ -362,6 +362,10 @@
 ;; "The algebraic preordering on S is then an ordering, given by x ≤ y if and only if x + y = y, hence all our semilattices are join-semilattices."
 ;; "A 0-semilattice is a semilattice which is also a monoid, or, equivalently, a semilattice which has a least element."
 
+;; Also, Handoff-counters, allows tiers of CRDTs so clients can use them without clock explosion:
+;; http://arxiv.org/pdf/1307.3207v1.pdf
+;; https://github.com/pssalmeida/clj-crdt
+
 (defrecord GCounter []
   CRDT
   (crdt-least [_]
