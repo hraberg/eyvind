@@ -635,6 +635,11 @@
 ;; TODO: implement Logoot:
 ;;       https://hal.archives-ouvertes.fr/inria-00432368/document
 ;;       https://github.com/bnoguchi/logoot
+;;       Alternatively, LSEQ:
+;;       https://hal.archives-ouvertes.fr/hal-00921633/document
+;;       https://github.com/Chat-Wane/LSEQ
+;;       Also, CRDT trees:
+;;       http://arxiv.org/pdf/1201.1784.pdf
 
 ;; Logical Clocks
 
