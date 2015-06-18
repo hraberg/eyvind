@@ -705,10 +705,12 @@
     (update-in (eyvind.core/logoot) [:storage] lww-map-assoc id text)))
 
 (defn logoot-insert-deltas [^Logoot logoot ^long idx text]
-  (reduce (fn [l [idx c]]
-            (crdt-merge l (logoot-insert-delta (crdt-merge l logoot) idx (str c))))
-          (logoot-insert-delta logoot idx (str (first text)))
-          (map vector (iterate inc (inc idx)) (rest text))))
+  (if (empty? text)
+    (eyvind.core/logoot)
+    (reduce (fn [l [idx c]]
+              (crdt-merge l (logoot-insert-delta (crdt-merge l logoot) idx (str c))))
+            (logoot-insert-delta logoot idx (str (first text)))
+            (map vector (iterate inc (inc idx)) (rest text)))))
 
 (defn logoot-insert [^Logoot logoot ^long idx text]
   (crdt-merge logoot (logoot-insert-deltas logoot idx text)))
