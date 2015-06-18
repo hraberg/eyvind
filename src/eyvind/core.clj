@@ -6,12 +6,12 @@
             [zeromq.zmq :as zmq])
   (:import
    [eyvind.mmap MappedFile]
-   [clojure.lang IPersistentMap IPersistentSet IPersistentVector BigInt]
+   [clojure.lang IPersistentMap IPersistentSet IPersistentVector]
    [java.io RandomAccessFile]
    [java.net InetAddress NetworkInterface]
    [java.nio ByteBuffer ByteOrder]
    [java.security MessageDigest]
-   [java.util Collections ConcurrentModificationException LinkedHashMap UUID]
+   [java.util ConcurrentModificationException LinkedHashMap UUID]
    [java.util.zip CRC32]))
 
 (defrecord DiskStore [keydir sync? ^long growth-factor ^MappedFile log])
@@ -300,8 +300,9 @@
   (crdt-merge [this other]
     (merge-with crdt-merge this other))
   (crdt-value [this]
-    (into {} (for [[k v] this]
-               [k (crdt-value v)])))
+    (into (empty this)
+          (for [[k v] this]
+            [k (crdt-value v)])))
 
   IPersistentSet
   (crdt-empty [this]
@@ -545,9 +546,10 @@
     (lww-map))
   (crdt-merge [this other]
     (let [new-key-set (crdt-merge (.key-set this) (.key-set ^LWWMap other))]
-      (->LWWMap new-key-set (select-keys (crdt-value (crdt-merge (lww-map-as-reg-map this)
-                                                                 (lww-map-as-reg-map other)))
-                                         (crdt-value new-key-set)))))
+      (->LWWMap new-key-set (into (empty storage)
+                                  (select-keys (crdt-value (crdt-merge (lww-map-as-reg-map this)
+                                                                       (lww-map-as-reg-map other)))
+                                               (crdt-value new-key-set))))))
   (crdt-value [this]
     (crdt-value storage)))
 
@@ -686,17 +688,15 @@
     (apply str (crdt-value this))))
 
 (defn logoot []
-  (->Logoot (lww-map)))
+  (->Logoot (->LWWMap (lww-set) (sorted-map))))
 
 (defn logoot-between [^Logoot logoot ^double id]
-  (let [ids (sort (keys (.storage ^LWWMap (.storage logoot))))
-        idx (Collections/binarySearch ids id)
-        idx (long (cond-> idx
-                    (neg? idx) (-> - dec)))]
-    [(nth ids (dec idx) 0.0) (nth ids idx 1.0)]))
+  (let [ids (.storage ^LWWMap (.storage logoot))]
+    [(or (some-> (rsubseq ids < id) first key) 0.0)
+     (or (some-> (subseq ids > id) first key) 1.0)]))
 
 (defn logoot-id-at-idx [^Logoot logoot ^long idx]
-  (loop [i 0 id 0.0 [[k v] & m] (sort-by key (.storage ^LWWMap (.storage logoot)))]
+  (loop [i 0 id 0.0 [[k v] & m] (seq (.storage ^LWWMap (.storage logoot)))]
     (cond (> i idx) id
           (not k) 1.0
           :else (recur (+ i (count v)) (double k) m))))
