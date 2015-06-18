@@ -702,30 +702,26 @@
 
 (defn logoot-insert-delta [^Logoot logoot ^long idx text]
   (let [id (logoot-id logoot idx)]
-    (update-in (eyvind.core/logoot) [:storage] lww-map-assoc id text)))
+    (update-in (eyvind.core/logoot) [:storage] lww-map-assoc id (str text))))
 
 (defn logoot-insert-deltas [^Logoot logoot ^long idx text]
-  (if (empty? text)
-    (eyvind.core/logoot)
-    (reduce (fn [l [idx c]]
-              (crdt-merge l (logoot-insert-delta (crdt-merge l logoot) idx (str c))))
-            (logoot-insert-delta logoot idx (str (first text)))
-            (map vector (iterate inc (inc idx)) (rest text)))))
+  (reduce (fn [l [^long i c]]
+            (crdt-merge l (logoot-insert-delta (crdt-merge l logoot) (+ i idx) c)))
+          (eyvind.core/logoot)
+          (map-indexed vector text)))
 
 (defn logoot-insert [^Logoot logoot ^long idx text]
   (crdt-merge logoot (logoot-insert-deltas logoot idx text)))
 
 (defn logoot-delete-delta [^Logoot logoot ^long idx]
-  (let [before (logoot-id-at-idx logoot idx)]
-    (update-in (eyvind.core/logoot) [:storage] lww-map-dissoc before)))
+  (let [id (logoot-id-at-idx logoot idx)]
+    (update-in (eyvind.core/logoot) [:storage] lww-map-dissoc id)))
 
 (defn logoot-delete-deltas [^Logoot logoot ^long idx ^long length]
-  (if (zero? length)
-    (eyvind.core/logoot)
-    (reduce (fn [l idx]
-              (crdt-merge l (logoot-delete-delta (crdt-merge l logoot) idx)))
-            (logoot-delete-delta logoot idx)
-            (repeat (dec length) idx))))
+  (reduce (fn [l idx]
+            (crdt-merge l (logoot-delete-delta (crdt-merge l logoot) idx)))
+          (eyvind.core/logoot)
+          (repeat length idx)))
 
 (defn logoot-delete
   ([^Logoot logoot ^long idx]
