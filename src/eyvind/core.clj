@@ -11,7 +11,7 @@
    [java.net InetAddress NetworkInterface]
    [java.nio ByteBuffer ByteOrder]
    [java.security MessageDigest]
-   [java.util ConcurrentModificationException LinkedHashMap UUID]
+   [java.util Collections ConcurrentModificationException LinkedHashMap UUID]
    [java.util.zip CRC32]))
 
 (defrecord DiskStore [keydir sync? ^long growth-factor ^MappedFile log])
@@ -687,8 +687,10 @@
 
 (defn logoot-between [^Logoot logoot ^double id]
   (let [ids (sort (keys (.storage ^LWWMap (.storage logoot))))
-        [before after] (split-with (comp pos? (partial compare id)) ids)]
-    [(or (last before) 0.0) (or (first after) 1.0)]))
+        idx (Collections/binarySearch ids id)
+        idx (long (cond-> idx
+                    (neg? idx) (-> - dec)))]
+    [(nth ids (dec idx) 0.0) (nth ids idx 1.0)]))
 
 (defn logoot-id-at-idx [^Logoot logoot ^long idx]
   (loop [i 0 id 0.0 [[k v] & m] (sort-by key (.storage ^LWWMap (.storage logoot)))]
