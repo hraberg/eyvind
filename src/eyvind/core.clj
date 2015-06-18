@@ -679,8 +679,11 @@
   (crdt-value [this]
     (->> (.storage ^LWWMap storage)
          (sort-by key)
-         (map val)
-         (apply str))))
+         (mapv val)))
+
+  Object
+  (toString [this]
+    (apply str (crdt-value this))))
 
 (defn logoot []
   (->Logoot (lww-map)))
