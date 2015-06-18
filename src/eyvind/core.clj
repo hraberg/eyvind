@@ -693,7 +693,7 @@
 (defn logoot-between [^Logoot logoot ^double id]
   (let [ids (.storage ^LWWMap (.storage logoot))]
     [(or (some-> (rsubseq ids < id) first key) 0.0)
-     (or (some-> (subseq ids > id) first key) 1.0)]))
+     (or (some-> (subseq ids >= id) first key) 1.0)]))
 
 (defn logoot-id-at-idx [^Logoot logoot ^long idx]
   (loop [i 0 id 0.0 [[k v] & m] (seq (.storage ^LWWMap (.storage logoot)))]
