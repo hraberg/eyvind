@@ -666,7 +666,7 @@
 ;;       Also, CRDT trees:
 ;;       http://arxiv.org/pdf/1201.1784.pdf
 
-;; This is a spike, no deltas, no sub-ids when before and after are next to each other, and in general doesn't work.
+;; This is a spike, no sub-ids when before and after are next to each other, and in general doesn't work very well.
 ;; Uses wall-clock ATM. Lot of remerging of deltas, uses Doubles instead of sub-ids. Messy merges.
 
 (declare logoot)
