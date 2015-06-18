@@ -666,7 +666,8 @@
 ;;       http://arxiv.org/pdf/1201.1784.pdf
 
 ;; This is a spike, no deltas, no sub-ids when before and after are next to each other, and in general doesn't work.
-;; Also, the version vector is embedded.
+;; Also, the version vector is embedded. It actually doesn't need a vector clock, this is somewhat of a hack.
+;; This was done to track removals, as deltas otherwise won't know if a node has been removed. Will revisit.
 
 (declare logoot)
 
