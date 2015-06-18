@@ -185,13 +185,12 @@
 (defn ips []
   (->> (NetworkInterface/getNetworkInterfaces)
        enumeration-seq
+       (remove #(.isLoopback ^NetworkInterface %))
        (mapcat (comp enumeration-seq #(.getInetAddresses ^NetworkInterface %)))
        (map #(.getHostAddress ^InetAddress %))))
 
 (defn ip []
-  (->> (ips)
-       (remove (partial re-find #"^127\."))
-       first))
+  (first (ips)))
 
 (defn mac-address
   ([]
@@ -202,7 +201,7 @@
         NetworkInterface/getByInetAddress
         .getHardwareAddress)))
 
-(defn mac-addres->str [mac]
+(defn mac-address->hex [mac]
   (->> mac
        (map (partial format "%02X"))
        (s/join "-")))
