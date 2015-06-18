@@ -688,12 +688,12 @@
 (defn logoot-between [^Logoot logoot ^double id]
   (let [ids (sort (keys (.storage ^LWWMap (.storage logoot))))
         [before after] (split-with (comp pos? (partial compare id)) ids)]
-    [(or (last before) 0.0) (or (first after) Double/MAX_VALUE)]))
+    [(or (last before) 0.0) (or (first after) 1.0)]))
 
 (defn logoot-id-at-idx [^Logoot logoot ^long idx]
   (loop [i 0 id 0.0 [[k v] & m] (sort-by key (.storage ^LWWMap (.storage logoot)))]
     (cond (> i idx) id
-          (not k) Double/MAX_VALUE
+          (not k) 1.0
           :else (recur (+ i (count v)) (double k) m))))
 
 (defn logoot-id [^Logoot logoot ^long idx]
