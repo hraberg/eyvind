@@ -665,6 +665,65 @@
 ;;       Also, CRDT trees:
 ;;       http://arxiv.org/pdf/1201.1784.pdf
 
+;; This is a spike, no deltas, no sub-ids when before and after are next to each other, and in general doesn't work.
+;; Also, the version vector is embedded.
+
+(declare logoot)
+
+(defrecord Logoot [ts storage]
+  CRDT
+  (crdt-least [this]
+    (logoot))
+  (crdt-merge [this other]
+    (let [^Logoot other other]
+      (->Logoot (crdt-merge ts (.ts other))
+                (crdt-merge storage (.storage other)))))
+  (crdt-value [this]
+    (->> (.storage ^LWWMap storage)
+         (sort-by key)
+         (map val)
+         (apply str))))
+
+(defn logoot [node]
+  (let [vv (vv node)
+        vv' (vv-event vv node)]
+    (->Logoot vv'
+              (-> (lww-map)
+                  (lww-map-assoc 0 "" vv)
+                  (lww-map-assoc Long/MAX_VALUE "" vv')))))
+
+;; This needs to handle nested ids, and in general made work.
+(defn logoot-between [^Logoot logoot ^long idx]
+  (let [idx (inc idx)
+        ks (into (sorted-set) (keys (.storage ^LWWMap (.storage logoot))))
+        fst (long (first (subseq ks < idx)))]
+    [(+ fst (count (lww-map-get (.storage logoot) fst))) (first (subseq ks > idx))]))
+
+(defn logoot-id [^Logoot logoot ^long idx]
+  (let [[^long before ^long after] (logoot-between logoot idx)]
+    (+ before (long (rand (- after before))))))
+
+(defn logoot-id-at-idx [^Logoot logoot ^long idx]
+  (let [idx (inc idx)]
+    (loop [i 1 id -1 [[k v] & m] (sort-by key (.storage ^LWWMap (.storage logoot)))]
+      (cond
+        (or (> i idx) (not k)) id
+        :else (recur (+ i (count v)) (long k) m)))))
+
+(defn logoot-insert [^Logoot logoot node ^long idx text]
+  (let [id (logoot-id logoot idx)
+        ts (vv-event (.ts logoot) node)]
+    (-> logoot
+        (assoc :ts ts)
+        (update-in [:storage] lww-map-assoc id text ts))))
+
+(defn logoot-delete [^Logoot logoot node ^long idx]
+  (let [before (logoot-id-at-idx logoot idx)
+        ts (vv-event (.ts logoot) node)]
+    (-> logoot
+        (assoc :ts ts)
+        (update-in [:storage] lww-map-dissoc before ts))))
+
 ;; Logical Clocks
 
 (def ^:dynamic *node-id* (long (biginteger (mac-address))))
