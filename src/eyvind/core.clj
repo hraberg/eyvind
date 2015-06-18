@@ -668,6 +668,7 @@
 
 ;; This is a spike, no sub-ids when before and after are next to each other, and in general doesn't work very well.
 ;; Uses wall-clock ATM. Lot of remerging of deltas, uses Doubles instead of sub-ids. Messy merges.
+;; Note, while retaining state delta, this version has tombstones which operation based Logoot shouldn't need.
 
 (declare logoot)
 
