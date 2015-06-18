@@ -698,24 +698,27 @@
   (loop [i 0 id 0.0 [[k v] & m] (seq (.storage ^LWWMap (.storage logoot)))]
     (cond (> i idx) id
           (not k) 1.0
-          :else (recur (+ i (count v)) (double k) m))))
+          :else (recur (+ i (long (if (string? v) (count v) 1))) (double k) m))))
 
 (defn logoot-id [^Logoot logoot ^long idx]
   (let [[^double before ^double after] (logoot-between logoot (logoot-id-at-idx logoot idx))]
     (+ before (double (rand (- after before))))))
 
-(defn logoot-insert-delta [^Logoot logoot ^long idx text]
+(defn logoot-insert-delta [^Logoot logoot ^long idx atom]
   (let [id (logoot-id logoot idx)]
-    (update-in (eyvind.core/logoot) [:storage] lww-map-assoc id (str text))))
+    (update-in (eyvind.core/logoot) [:storage] lww-map-assoc id atom)))
 
 (defn logoot-insert-deltas [^Logoot logoot ^long idx text]
   (reduce (fn [l [^long i c]]
-            (crdt-merge l (logoot-insert-delta (crdt-merge l logoot) (+ i idx) c)))
+            (crdt-merge l (logoot-insert-delta (crdt-merge l logoot) (+ i idx) (str c))))
           (eyvind.core/logoot)
           (map-indexed vector text)))
 
-(defn logoot-insert [^Logoot logoot ^long idx text]
+(defn logoot-insert-text [^Logoot logoot ^long idx text]
   (crdt-merge logoot (logoot-insert-deltas logoot idx text)))
+
+(defn logoot-insert-atom [^Logoot logoot ^long idx x]
+  (crdt-merge logoot (logoot-insert-delta logoot idx x)))
 
 (defn logoot-delete-delta [^Logoot logoot ^long idx]
   (let [id (logoot-id-at-idx logoot idx)]
@@ -727,11 +730,14 @@
           (eyvind.core/logoot)
           (repeat length idx)))
 
-(defn logoot-delete
+(defn logoot-delete-text
   ([^Logoot logoot ^long idx]
    (logoot-delete logoot idx 1))
   ([^Logoot logoot ^long idx ^long length]
    (crdt-merge logoot (logoot-delete-deltas logoot idx length))))
+
+(defn logoot-delete-atom [^Logoot logoot ^long idx]
+  (crdt-merge logoot (logoot-delete-delta logoot idx)))
 
 ;; Logical Clocks
 
