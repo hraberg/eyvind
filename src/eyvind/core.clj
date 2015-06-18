@@ -666,64 +666,60 @@
 ;;       http://arxiv.org/pdf/1201.1784.pdf
 
 ;; This is a spike, no deltas, no sub-ids when before and after are next to each other, and in general doesn't work.
-;; Also, the version vector is embedded. It actually doesn't need a vector clock, this is somewhat of a hack.
-;; This was done to track removals, as deltas otherwise won't know if a node has been removed. Will revisit.
+;; Uses wall-clock ATM.
 
 (declare logoot)
 
-(defrecord Logoot [ts storage]
+(defrecord Logoot [storage]
   CRDT
   (crdt-least [this]
     (logoot))
   (crdt-merge [this other]
     (let [^Logoot other other]
-      (->Logoot (crdt-merge ts (.ts other))
-                (crdt-merge storage (.storage other)))))
+      (->Logoot (crdt-merge storage (.storage other)))))
   (crdt-value [this]
     (->> (.storage ^LWWMap storage)
          (sort-by key)
          (map val)
          (apply str))))
 
-(defn logoot [node]
-  (let [vv (vv node)
-        vv' (vv-event vv node)]
-    (->Logoot vv'
-              (-> (lww-map)
-                  (lww-map-assoc 0 "" vv)
-                  (lww-map-assoc Long/MAX_VALUE "" vv')))))
+(defn logoot []
+  (-> (lww-map)
+      (lww-map-assoc 0 "")
+      (lww-map-assoc Long/MAX_VALUE "")
+      ->Logoot))
 
 ;; This needs to handle nested ids, and in general made work.
-(defn logoot-between [^Logoot logoot ^long idx]
-  (let [idx (inc idx)
-        ks (into (sorted-set) (keys (.storage ^LWWMap (.storage logoot))))
-        fst (long (first (subseq ks < idx)))]
-    [(+ fst (count (lww-map-get (.storage logoot) fst))) (first (subseq ks > idx))]))
-
-(defn logoot-id [^Logoot logoot ^long idx]
-  (let [[^long before ^long after] (logoot-between logoot idx)]
-    (+ before (long (rand (- after before))))))
+(defn logoot-between
+  ([^Logoot logoot id]
+   (logoot-between logoot id (sort (keys (.storage ^LWWMap (.storage logoot))))))
+  ([^Logoot logoot ^long id ids]
+    (let [[before after] (split-with (comp pos? (partial compare id)) ids)]
+      [(last before) (first after)])))
 
 (defn logoot-id-at-idx [^Logoot logoot ^long idx]
-  (let [idx (inc idx)]
-    (loop [i 1 id -1 [[k v] & m] (sort-by key (.storage ^LWWMap (.storage logoot)))]
-      (cond
-        (or (> i idx) (not k)) id
-        :else (recur (+ i (count v)) (long k) m)))))
+  (loop [i 0 id 0 [[k v] & m] (sort-by key (.storage ^LWWMap (.storage logoot)))]
+    (if (or (> i idx) (not k))
+      id
+      (recur (+ i (count v)) (long k) m))))
 
-(defn logoot-insert [^Logoot logoot node ^long idx text]
-  (let [id (logoot-id logoot idx)
-        ts (vv-event (.ts logoot) node)]
-    (-> logoot
-        (assoc :ts ts)
-        (update-in [:storage] lww-map-assoc id text ts))))
+(defn logoot-id [^Logoot logoot ^long idx]
+  (let [[^long before ^long after] (logoot-between logoot (logoot-id-at-idx logoot idx))]
+    (+ before (long (rand (- after before))))))
 
-(defn logoot-delete [^Logoot logoot node ^long idx]
-  (let [before (logoot-id-at-idx logoot idx)
-        ts (vv-event (.ts logoot) node)]
-    (-> logoot
-        (assoc :ts ts)
-        (update-in [:storage] lww-map-dissoc before ts))))
+(defn logoot-insert-delta [^Logoot logoot ^long idx text]
+  (let [id (logoot-id logoot idx)]
+    (update-in (eyvind.core/logoot) [:storage] lww-map-assoc id text)))
+
+(defn logoot-insert [^Logoot logoot ^long idx text]
+  (crdt-merge logoot (logoot-insert-delta logoot idx text)))
+
+(defn logoot-delete-delta [^Logoot logoot ^long idx]
+  (let [before (logoot-id-at-idx logoot idx)]
+    (update-in (eyvind.core/logoot) [:storage] lww-map-dissoc before)))
+
+(defn logoot-delete-delta [^Logoot logoot ^long idx]
+  (crdt-merge logoot (logoot-delete-delta logoot idx)))
 
 ;; Logical Clocks
 
