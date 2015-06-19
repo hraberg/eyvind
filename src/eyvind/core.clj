@@ -655,15 +655,11 @@
   (crdt-least [this]
     (or-swot))
   (crdt-merge [this other]
-    (let [other ^ORSwot other
-          ts (crdt-merge ts (.ts other))
-          adds (crdt-merge adds (.adds other))
-          removes (crdt-merge removes (.removes other))]
+    (let [{:keys [ts adds removes]} (merge-with crdt-merge this other)]
       (->ORSwot ts
                 (->> adds
-                     (remove (fn [[k x]]
-                               (when-let [y (removes k)]
-                                 (not (vv-dominates? x y)))))
+                     (filter (fn [[k v]]
+                               (vv-dominates? v (removes k))))
                      (into {}))
                 (->> removes
                      (remove (comp pos? (partial compare ts) val))
@@ -677,21 +673,27 @@
   ([node]
     (->ORSwot (vv node) {} {})))
 
-(defn or-swot-conj-delta [{:keys [ts adds]} x node]
-  (let [ts (vv-event ts node)]
-    (-> (or-swot)
-        (assoc :ts ts)
-        (assoc-in [:adds x] (select-keys ts [node])))))
+(defn or-swot-conj-delta
+  ([coll x]
+   (or-swot-conj-delta coll x *node-id*))
+  ([{:keys [ts adds]} x node]
+   (let [ts (vv-event ts node)]
+     (-> (or-swot)
+         (assoc :ts ts)
+         (assoc-in [:adds x] (assoc (crdt-least ts) node (get ts node)))))))
 
-(defn or-swot-conj [coll x node]
-  (crdt-merge coll (or-swot-conj-delta coll x node)))
+(defn or-swot-conj
+  ([coll c]
+   (or-swot-conj coll c *node-id*))
+  ([coll x node]
+   (crdt-merge coll (or-swot-conj-delta coll x node))))
 
-(defn or-swot-disj-delta [{:keys [ts adds]} x node]
+(defn or-swot-disj-delta [{:keys [ts adds]} x]
   (cond-> (assoc (or-swot) :ts ts)
     (contains? adds x) (assoc-in [:removes x] (get adds x))))
 
 (defn or-swot-disj [coll x node]
-  (crdt-merge coll (or-swot-disj-delta coll x node)))
+  (crdt-merge coll (or-swot-disj-delta coll x)))
 
 (defn or-swot-contains? [{:keys [adds]} x]
   (contains? adds x))
