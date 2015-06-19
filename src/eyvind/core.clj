@@ -283,6 +283,7 @@
 ;;       http://hal.upmc.fr/file/index/docid/555588/filename/techreport.pdf
 ;;       http://arxiv.org/pdf/1410.2803.pdf
 ;;       http://www.eecs.berkeley.edu/Pubs/TechRpts/2012/EECS-2012-167.pdf
+;;       http://www.cs.ucsb.edu/~agrawal/spring2011/ugrad/p233-wuu.pdf
 
 (defprotocol CRDT
   (crdt-least [_])
@@ -590,6 +591,8 @@
        (into {})))
 
 (declare or-set or-set-contains?)
+
+;; TODO: Implemented the optimized version which gc tombstones in the paper, http://arxiv.org/pdf/1410.2803v2.pdf
 
 (defrecord ORSet [adds removes]
   CRDT
