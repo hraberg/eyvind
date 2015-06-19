@@ -662,6 +662,7 @@
 
 ;; TODO: implement Logoot:
 ;;       https://hal.archives-ouvertes.fr/inria-00432368/document
+;;       http://www.researchgate.net/profile/Pascal_Urso/publication/233882440_Logoot-Undo_Distributed_Collaborative_Editing_System/links/0fcfd50c84f5194937000000.pdf
 ;;       https://github.com/bnoguchi/logoot
 ;;       Alternatively, LSEQ:
 ;;       https://hal.archives-ouvertes.fr/hal-00921633/document
@@ -712,6 +713,7 @@
   (let [id (logoot-id logoot idx)]
     (update-in (eyvind.core/logoot) [:storage] lww-map-assoc id atom)))
 
+;; TODO: This should just generate a list of ids between and then add them, the paper does this.
 (defn logoot-insert-deltas [^Logoot logoot ^long idx text]
   (reduce (fn [l [^long i c]]
             (crdt-merge l (logoot-insert-delta (crdt-merge l logoot) (+ i idx) (str c))))
