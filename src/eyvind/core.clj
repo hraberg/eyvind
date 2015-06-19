@@ -222,6 +222,9 @@
 (defn node-address [ip port]
   (str "tcp://" ip ":" port))
 
+(def ^:dynamic *node-id* (long (biginteger (mac-address))))
+(defonce node-counter (volatile! {}))
+
 ;; http://johnleach.co.uk/downloads/slides/riak-consistent-hashing.pdf
 ;; http://www.johnchukwuma.com/training/Riak%20Handbook.pdf
 ;; http://gotocon.com/dl/goto-aar-2012/slides/SteveVinoski_BuildingDistributedSystemsWithRiakCore.pdf
@@ -645,7 +648,7 @@
 ;; Doesn't necessarily work. The general idea is that the master version vector eventually will clean out the tombstone set.
 ;; ORSwot stands for Observe Remove Set with-out tombstones.
 
-(declare or-swot vv vv-event)
+(declare or-swot vv vv-event vv-dominates?)
 
 (defrecord ORSwot [ts adds removes]
   CRDT
@@ -660,7 +663,7 @@
                 (->> adds
                      (remove (fn [[k x]]
                                (when-let [y (removes k)]
-                                 (not (pos? (compare x y))))))
+                                 (not (vv-dominates? x y)))))
                      (into {}))
                 (->> removes
                      (remove (comp pos? (partial compare ts) val))
@@ -800,7 +803,7 @@
 
 (defn logoot-delete-text
   ([^Logoot logoot ^long idx]
-   (logoot-delete logoot idx 1))
+   (logoot-delete-text logoot idx 1))
   ([^Logoot logoot ^long idx ^long length]
    (crdt-merge logoot (logoot-delete-deltas logoot idx length))))
 
@@ -808,9 +811,6 @@
   (crdt-merge logoot (logoot-delete-delta logoot idx)))
 
 ;; Logical Clocks
-
-(def ^:dynamic *node-id* (long (biginteger (mac-address))))
-(defonce node-counter (volatile! {}))
 
 (defn next-node-count
   ([]
