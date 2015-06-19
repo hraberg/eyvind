@@ -10,8 +10,8 @@
    [java.io RandomAccessFile]
    [java.net InetAddress NetworkInterface]
    [java.nio ByteBuffer ByteOrder]
-   [java.security MessageDigest]
-   [java.util ConcurrentModificationException LinkedHashMap UUID]
+   [java.security MessageDigest SecureRandom]
+   [java.util Base64 ConcurrentModificationException LinkedHashMap UUID]
    [java.util.zip CRC32]))
 
 (defrecord DiskStore [keydir sync? ^long growth-factor ^MappedFile log])
@@ -181,6 +181,19 @@
 
 (defn hex->biginteger [x]
   (BigInteger. (str x) 16))
+
+
+(def ^:dynamic *prgn* (SecureRandom.))
+
+(defn random-bytes
+  ([]
+   (random-bytes 16))
+  ([n]
+   (doto (byte-array n)
+     (->> (.nextBytes ^SecureRandom *prgn*)))))
+
+(defn base64 [^bytes bs]
+  (.encodeToString (Base64/getUrlEncoder) bs))
 
 (defn ips []
   (->> (NetworkInterface/getNetworkInterfaces)
