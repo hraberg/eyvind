@@ -623,11 +623,10 @@
 (defn or-set []
   (->ORSet {} {}))
 
-(defn or-tag []
-  (UUID/randomUUID))
+(def ^:dynamic *or-tag-fn* #(UUID/randomUUID))
 
 (defn or-set-conj-delta [{:keys [adds]} x]
-  (assoc-in (or-set) [:adds x] #{(or-tag)}))
+  (assoc-in (or-set) [:adds x] #{(*or-tag-fn*)}))
 
 (defn or-set-conj [coll x]
   (crdt-merge coll (or-set-conj-delta coll x)))
