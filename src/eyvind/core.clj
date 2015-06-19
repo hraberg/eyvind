@@ -605,8 +605,6 @@
 
 (declare or-set or-set-contains?)
 
-;; TODO: Implemented the optimized version which gc tombstones in the paper, http://arxiv.org/pdf/1410.2803v2.pdf
-
 (defrecord ORSet [adds removes]
   CRDT
   (crdt-least [this]
@@ -642,6 +640,58 @@
   (->> (clojure.set/difference (adds x) (removes x))
        count
        pos?))
+
+;; This is inspired by the optimized version which gc tombstones in the paper, http://arxiv.org/pdf/1410.2803v2.pdf
+;; Doesn't necessarily work. The general idea is that the master version vector eventually will clean out the tombstone set.
+;; ORSwot stands for Observe Remove Set with-out tombstones.
+
+(declare or-swot vv vv-event)
+
+(defrecord ORSwot [ts adds removes]
+  CRDT
+  (crdt-least [this]
+    (or-swot))
+  (crdt-merge [this other]
+    (let [other ^ORSwot other
+          ts (crdt-merge ts (.ts other))
+          adds (crdt-merge adds (.adds other))
+          removes (crdt-merge removes (.removes other))]
+      (->ORSwot ts
+                (->> adds
+                     (remove (fn [[k x]]
+                               (when-let [y (removes k)]
+                                 (not (pos? (compare x y))))))
+                     (into {}))
+                (->> removes
+                     (remove (comp pos? (partial compare ts) val))
+                     (into {})))))
+  (crdt-value [this]
+    (set (keys adds))))
+
+(defn or-swot
+  ([]
+   (or-swot *node-id*))
+  ([node]
+    (->ORSwot (vv node) {} {})))
+
+(defn or-swot-conj-delta [{:keys [ts adds]} x node]
+  (let [ts (vv-event ts node)]
+    (-> (or-swot)
+        (assoc :ts ts)
+        (assoc-in [:adds x] (select-keys ts [node])))))
+
+(defn or-swot-conj [coll x node]
+  (crdt-merge coll (or-swot-conj-delta coll x node)))
+
+(defn or-swot-disj-delta [{:keys [ts adds]} x node]
+  (cond-> (assoc (or-swot) :ts ts)
+    (contains? adds x) (assoc-in [:removes x] (get adds x))))
+
+(defn or-swot-disj [coll x node]
+  (crdt-merge coll (or-swot-disj-delta coll x node)))
+
+(defn or-swot-contains? [{:keys [adds]} x]
+  (contains? adds x))
 
 ;; From http://www.eecs.berkeley.edu/Pubs/TechRpts/2012/EECS-2012-167.pdf
 ;; And https://github.com/CBaquero/delta-enabled-crdts
