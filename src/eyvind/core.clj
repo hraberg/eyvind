@@ -662,7 +662,7 @@
                                (vv-dominates? v (removes k))))
                      (into {}))
                 (->> removes
-                     (remove (comp pos? (partial compare ts) val))
+                     (remove (comp (partial vv-dominates? ts) val))
                      (into {})))))
   (crdt-value [this]
     (set (keys adds))))
@@ -692,7 +692,7 @@
   (cond-> (assoc (or-swot) :ts ts)
     (contains? adds x) (assoc-in [:removes x] (get adds x))))
 
-(defn or-swot-disj [coll x node]
+(defn or-swot-disj [coll x]
   (crdt-merge coll (or-swot-disj-delta coll x)))
 
 (defn or-swot-contains? [{:keys [adds]} x]
