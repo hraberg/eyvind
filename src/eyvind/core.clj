@@ -657,6 +657,7 @@
 ;; Hence, we need dots. Also, it's unsure that the merge is proper, or if it has to do on both sides and then merged.
 ;; The delta paper also makes the distinction of delta-mutations and delta-groups, which is a join of the former.
 ;; These can be batched up over the network if necessary.
+;; This paper should be intersting, removes the need for ordering: http://www.cmi.ac.in/~spsuresh/pdffiles/oorsets.pdf
 
 (declare or-swot vv vv-event vv-dominates?)
 
@@ -917,8 +918,11 @@
   (compareTo [this other]
     (compare (dvvs-join this) (dvvs-join other))))
 
-(defn dvvs [r]
-  (assoc (->DVVSet) r [0 []]))
+(defn dvvs
+  ([]
+   (dvvs *node-id*))
+  ([r]
+   (assoc (->DVVSet) r [0 []])))
 
 (defn dvvs-sync [x y]
   (crdt-merge x y))
@@ -948,7 +952,7 @@
 
 (defn dvvs-event
   ([dvvs vv v]
-   (dvvs-event vv *node-id* v))
+   (dvvs-event dvvs vv *node-id* v))
   ([dvvs vv r v]
    (crdt-merge dvvs (dvvs-event-delta dvvs vv r v))))
 
