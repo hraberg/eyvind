@@ -461,6 +461,8 @@
 ;; Flag CRDT
 ;; TODO: Can we split out the map vs value stuff for all these CRDTs?
 
+;; This flag is wrong, it will kind of work, but with strange semantics.
+
 (defrecord Flag [enable disable]
   CRDT
   (crdt-least [_]
