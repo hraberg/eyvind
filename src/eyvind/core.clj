@@ -694,7 +694,7 @@
    (let [dv (get adds x (dvvs node (get ts node)))]
      (-> (or-swot)
          (assoc :ts (vv-event ts node))
-         (assoc-in [:adds x] (dvvs-event-delta dv ts node nil))))))
+         (assoc-in [:adds x] (dvvs-event-delta dv ts node x))))))
 
 (defn or-swot-conj
   ([coll c]
