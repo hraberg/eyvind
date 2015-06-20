@@ -659,7 +659,9 @@
 ;; These can be batched up over the network if necessary.
 ;; This paper should be intersting, removes the need for ordering: http://www.cmi.ac.in/~spsuresh/pdffiles/oorsets.pdf
 
-(declare or-swot vv vv-event vv-dominates?)
+;; Attempt using DVVS.
+
+(declare or-swot vv vv-event dvvs dvvs-node dvvs-event-delta dvvs-discard dvvs-join)
 
 (defrecord ORSwot [ts adds removes]
   CRDT
@@ -668,12 +670,13 @@
   (crdt-merge [this other]
     (let [{:keys [ts adds removes]} (merge-with crdt-merge this other)]
       (->ORSwot ts
-                (->> adds
-                     (filter (fn [[k v]]
-                               (vv-dominates? v (removes k))))
+                (->> (for [[k v] adds
+                           :when (compare-> v (removes k))]
+                       [k (dvvs-discard v ts)])
                      (into {}))
-                (->> removes
-                     (remove (comp (partial vv-dominates? ts) val))
+                (->> (for [[k v] removes
+                           :when (not (vv-dominates? ts (dvvs-join v)))]
+                       [k v])
                      (into {})))))
   (crdt-value [this]
     (set (keys adds))))
@@ -688,10 +691,10 @@
   ([coll x]
    (or-swot-conj-delta coll x *node-id*))
   ([{:keys [ts adds]} x node]
-   (let [ts (vv-event ts node)]
+   (let [dv (get adds x (dvvs node (get ts node)))]
      (-> (or-swot)
-         (assoc :ts ts)
-         (assoc-in [:adds x] (assoc (crdt-least ts) node (get ts node)))))))
+         (assoc :ts (vv-event ts node))
+         (assoc-in [:adds x] (dvvs-event-delta dv ts node nil))))))
 
 (defn or-swot-conj
   ([coll c]
@@ -922,7 +925,9 @@
   ([]
    (dvvs *node-id*))
   ([r]
-   (assoc (->DVVSet) r [0 []])))
+   (dvvs r 0))
+  ([r ts]
+   (assoc (->DVVSet) r [ts []])))
 
 (defn dvvs-sync [x y]
   (crdt-merge x y))
