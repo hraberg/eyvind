@@ -618,7 +618,10 @@
     (let [other ^ORSet other
           adds (crdt-merge adds (.adds other))
           removes (crdt-merge removes (.removes other))]
-      (->ORSet (merge-with clojure.set/difference adds removes)
+      (->ORSet (->> (select-keys removes (keys adds))
+                    (merge-with clojure.set/difference adds)
+                    (remove (comp empty? val))
+                    (into {}))
                removes)))
   (crdt-value [this]
     (->> (keys adds)
