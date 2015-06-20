@@ -658,6 +658,7 @@
 ;; The delta paper also makes the distinction of delta-mutations and delta-groups, which is a join of the former.
 ;; These can be batched up over the network if necessary.
 ;; This paper should be intersting, removes the need for ordering: http://www.cmi.ac.in/~spsuresh/pdffiles/oorsets.pdf
+;; Note that that paper actually advances the clock for the full set after adding the element using the old clock.
 
 ;; Attempt using DVVS.
 
@@ -694,7 +695,7 @@
    (let [dv (get adds x (dvvs node (get ts node)))]
      (-> (or-swot)
          (assoc :ts (vv-event ts node))
-         (assoc-in [:adds x] (dvvs-event-delta dv ts node x))))))
+         (assoc-in [:adds x] (dvvs-event dv ts node x))))))
 
 (defn or-swot-conj
   ([coll c]
