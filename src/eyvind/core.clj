@@ -615,9 +615,11 @@
   (crdt-least [this]
     (or-set))
   (crdt-merge [this other]
-    (let [other ^ORSet other]
-      (->ORSet (crdt-merge (merge-with clojure.set/difference adds (.removes other)) (.adds other))
-               (crdt-merge removes (.removes other)))))
+    (let [other ^ORSet other
+          adds (crdt-merge adds (.adds other))
+          removes (crdt-merge removes (.removes other))]
+      (->ORSet (merge-with clojure.set/difference adds removes)
+               removes)))
   (crdt-value [this]
     (->> (keys adds)
          (filter (partial or-set-contains? this))
