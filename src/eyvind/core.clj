@@ -648,9 +648,13 @@
        count
        pos?))
 
-;; This is inspired by the optimized version which gc tombstones in the paper, http://arxiv.org/pdf/1410.2803v2.pdf
+;; This is inspired by the optimized version which gc tombstones in the delta paper, http://arxiv.org/pdf/1410.2803v2.pdf
 ;; Doesn't necessarily work. The general idea is that the master version vector eventually will clean out the tombstone set.
 ;; ORSwot stands for Observe Remove Set with-out tombstones.
+;; I think there's a race condition if removes are delivered out of order and target already superceded by later vv.
+;; Need to understand the delta paper properly which uses dots.
+;; The delta paper also makes the distinction of delta-mutations and delta-groups, which is a join of the former.
+;; These can be batched up over the network if necessary.
 
 (declare or-swot vv vv-event vv-dominates?)
 
