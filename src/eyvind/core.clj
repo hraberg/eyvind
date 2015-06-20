@@ -653,6 +653,8 @@
 ;; ORSwot stands for Observe Remove Set with-out tombstones.
 ;; I think there's a race condition if removes are delivered out of order and target already superceded by later vv.
 ;; Need to understand the delta paper properly which uses dots.
+;; Section 7.2 explicitly states this, a single vv only works if there's causal delivery, otherwise dots are needed.
+;; Hence, we need dots. Also, it's unsure that the merge is proper, or if it has to do on both sides and then merged.
 ;; The delta paper also makes the distinction of delta-mutations and delta-groups, which is a join of the former.
 ;; These can be batched up over the network if necessary.
 
