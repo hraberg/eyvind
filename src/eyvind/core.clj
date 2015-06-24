@@ -705,13 +705,13 @@
   (->Flag (or-set)))
 
 (defn flag-enable-delta [{:keys [storage]}]
-  (assoc (flag) :storage (or-set-conj storage true)))
+  (->Flag (or-set-conj-delta storage true)))
 
 (defn flag-enable [flag]
   (crdt-merge flag (flag-enable-delta flag)))
 
 (defn flag-disable-delta [{:keys [storage]}]
-  (assoc (flag) :storage (or-set-disj storage true)))
+  (->Flag (or-set-disj-delta storage true)))
 
 (defn flag-disable [flag]
   (crdt-merge flag (flag-disable-delta flag)))
