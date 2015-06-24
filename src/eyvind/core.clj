@@ -458,40 +458,6 @@
   ([pn k delta]
    (crdt-merge pn (pn-counter-dec-delta pn k delta))))
 
-;; Flag CRDT
-;; TODO: Can we split out the map vs value stuff for all these CRDTs?
-
-;; This flag is wrong, it will kind of work, but with strange semantics.
-;; A better, working flag is a singleton ORSet.
-
-(defrecord Flag [enable disable]
-  CRDT
-  (crdt-least [_]
-    (->Flag (->GCounter) (->GCounter)))
-  (crdt-merge [this other]
-    (merge-with crdt-merge this other))
-  (crdt-value [this]
-    (> (long (crdt-value enable)) (long (crdt-value disable))))
-
-  Comparable
-  (compareTo [this other]
-    (compare (crdt-value this) (crdt-value other))))
-
-(defn flag [node]
-  (->Flag (g-counter node) (g-counter node)))
-
-(defn flag-enable-delta [flag k]
-  (assoc (crdt-least flag) :enable (g-counter-inc-delta (:enable flag) k)))
-
-(defn flag-enable [flag k]
-  (crdt-merge flag (flag-enable-delta flag k)))
-
-(defn flag-disable-delta [flag k]
-  (assoc (crdt-least flag) :disable (g-counter-inc-delta (:disable flag) k)))
-
-(defn flag-disable [flag k]
-  (crdt-merge flag (flag-disable-delta flag k)))
-
 ;; Roshi-style CRDT LWW set:
 ;; https://github.com/soundcloud/roshi
 
@@ -716,6 +682,42 @@
 
 (defn or-swot-contains? [{:keys [adds]} x]
   (contains? adds x))
+
+;; Flag CRDT
+
+(declare flag flag-enabled?)
+
+(defrecord Flag [storage]
+  CRDT
+  (crdt-least [_]
+    (flag))
+  (crdt-merge [this other]
+    (merge-with crdt-merge this other))
+  (crdt-value [this]
+    (flag-enabled? this))
+
+  Comparable
+  (compareTo [this other]
+    (compare (crdt-value this) (crdt-value other))))
+
+(defn flag []
+  (->Flag (or-set)))
+
+(defn flag-enable-delta [{:keys [storage]}]
+  (assoc (flag) :storage (or-set-conj storage true)))
+
+(defn flag-enable [flag]
+  (crdt-merge flag (flag-enable-delta flag)))
+
+(defn flag-disable-delta [{:keys [storage]}]
+  (assoc (flag) :storage (or-set-disj storage true)))
+
+(defn flag-disable [flag]
+  (crdt-merge flag (flag-disable-delta flag)))
+
+(defn flag-enabled? [{:keys [storage]}]
+  (or-set-contains? storage true))
+
 
 ;; From http://www.eecs.berkeley.edu/Pubs/TechRpts/2012/EECS-2012-167.pdf
 ;; And https://github.com/CBaquero/delta-enabled-crdts
