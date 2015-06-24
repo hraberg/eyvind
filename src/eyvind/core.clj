@@ -459,6 +459,9 @@
   ([pn k delta]
    (crdt-merge pn (pn-counter-dec-delta pn k delta))))
 
+;; TODO: Implement InvCRDT BoundedCounter, which uses an escrow model:
+;;       http://arxiv.org/pdf/1503.09052.pdf
+
 ;; Roshi-style CRDT LWW set:
 ;; https://github.com/soundcloud/roshi
 
