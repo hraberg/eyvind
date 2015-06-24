@@ -385,6 +385,7 @@
 ;; The more general point around protocols / evolving processes:
 ;; "We have presented a solution to ECDC, called Handoff Counters, that adopts the CRDT philosophy, making the “protocol” state be a part of the CRDT state."
 ;; This paper makes an unrelated point about batching fsyncs and only send deltas which has been written.
+;; In this gist https://gist.github.com/russelldb/f92f44bdfb619e089a4d it implies that the Riak actor (node here) is the vnode id.
 
 (defrecord GCounter []
   CRDT
