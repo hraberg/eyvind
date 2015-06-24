@@ -462,6 +462,7 @@
 ;; TODO: Can we split out the map vs value stuff for all these CRDTs?
 
 ;; This flag is wrong, it will kind of work, but with strange semantics.
+;; A better, working flag is a singleton ORSet.
 
 (defrecord Flag [enable disable]
   CRDT
