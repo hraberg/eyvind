@@ -1008,6 +1008,10 @@
 ;; See also:
 ;; http://bitsavers.informatik.uni-stuttgart.de/pdf/xerox/parc/techReports/CSL-89-1_Epidemic_Algorithms_for_Replicated_Database_Maintenance.pdf
 ;; http://czmq.zeromq.org/manual:zgossip
+;; And:
+;; Plumtree "Epidemic Broadcast Trees", uses a riak_dt ORSwot to share node membership, but doesn't depend on riak_core:
+;; https://github.com/helium/plumtree
+;; http://www.gsd.inesc-id.pt/~jleitao/pdf/srds07-leitao.pdf
 
 ;; ZeroMQ
 
