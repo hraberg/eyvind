@@ -642,7 +642,7 @@
 
 ;; Attempt using DVVS.
 
-(declare or-swot vv vv-event dvvs dvvs-node dvvs-event-delta dvvs-discard dvvs-join)
+(declare or-swot vv vv-event vv-dominates? dvvs dvvs-node dvvs-event dvvs-event-delta dvvs-discard dvvs-join)
 
 (defrecord ORSwot [ts adds removes]
   CRDT
