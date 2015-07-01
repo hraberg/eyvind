@@ -303,6 +303,10 @@
 
 ;; TODO: should this be crdt-empty, crdt-merge and crdt-deref to match Clojure better?
 
+;; TODO: Lasp models dependent operations between CRDTs - like applying map to a set to maintain a dependent one:
+;;       https://www.info.ucl.ac.be/~pvr/papoc-2015-lasp-abstract.pdf
+;;       http://lasp-lang.org/
+
 (defprotocol CRDT
   (crdt-least [_])
   (crdt-merge [_ other])
