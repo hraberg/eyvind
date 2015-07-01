@@ -990,6 +990,7 @@
 ;; http://www.bailis.org/papers/ramp-sigmod2014.pdf
 ;; https://github.com/pbailis/ramp-sigmod2014-code
 ;; Useful enough to implement? Can it be backed by CRDTs? Check py-impl in above repo for a Python version.
+;; Paper also discusses secondary indexes a bit.
 
 ;; SWIM: Scalable, Weakly Consistent, Infection-Style, Membership Protocol
 ;; http://www.cs.cornell.edu/~asdas/research/dsn02-swim.pdf
