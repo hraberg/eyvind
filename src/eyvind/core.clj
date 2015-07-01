@@ -989,7 +989,7 @@
 ;; Scalable Atomic Visibility with RAMP Transactions:
 ;; http://www.bailis.org/papers/ramp-sigmod2014.pdf
 ;; https://github.com/pbailis/ramp-sigmod2014-code
-;; Useful enough to implement? Can it be backed by CRDTs?
+;; Useful enough to implement? Can it be backed by CRDTs? Check py-impl in above repo for a Python version.
 
 ;; SWIM: Scalable, Weakly Consistent, Infection-Style, Membership Protocol
 ;; http://www.cs.cornell.edu/~asdas/research/dsn02-swim.pdf
