@@ -909,7 +909,9 @@
 ;; https://github.com/ricardobcl/Dotted-Version-Vectors
 ;; Based on http://haslab.uminho.pt/tome/files/dvvset-dais.pdf section 6.5.
 ;; TODO: How to represent this using primitives like LWWReg and VV?
-;;       Check out this follow up paper: http://haslab.uminho.pt/tome/files/global_logical_clocks.pdf
+;;       Check out this follow up paper, Global Logical Clocks:
+;;       http://haslab.uminho.pt/tome/files/global_logical_clocks.pdf
+;;       https://github.com/ricardobcl/GlobalLogicalClocks
 
 (declare dvvs-join)
 
