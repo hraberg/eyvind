@@ -301,6 +301,8 @@
 ;;       http://www.eecs.berkeley.edu/Pubs/TechRpts/2012/EECS-2012-167.pdf
 ;;       http://www.cs.ucsb.edu/~agrawal/spring2011/ugrad/p233-wuu.pdf
 
+;; TODO: should this be crdt-empty, crdt-merge and crdt-deref to match Clojure better?
+
 (defprotocol CRDT
   (crdt-least [_])
   (crdt-merge [_ other])
