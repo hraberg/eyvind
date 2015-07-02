@@ -173,15 +173,11 @@
        (.digest (message-digest))
        (BigInteger. 1)))
 
-(defn consistent-double-hash ^double [x]
-  (.doubleValue (consistent-hash x)))
-
 (defn biginteger->hex [^BigInteger x]
   (format "%040x" x))
 
 (defn hex->biginteger [x]
   (BigInteger. (str x) 16))
-
 
 (def ^:dynamic *prgn* (SecureRandom.))
 
@@ -272,7 +268,7 @@
   (quot (max-digest) partitions))
 
 (defn partition-for-key ^long [^long partitions k]
-  (long (mod (inc (quot (consistent-double-hash k)
+  (long (mod (inc (quot (double (consistent-hash k))
                         (partition-size partitions)))
              partitions)))
 
@@ -290,9 +286,6 @@
        (map-indexed vector)
        (filter (comp #{node} second))
        (mapv first)))
-
-(defn node-by-idx [nodes idx]
-  (nth nodes idx))
 
 ;; CRDTs
 ;; TODO: State deltas are just small / single element CRDTs that are joined up to the full thing:
@@ -1054,7 +1047,7 @@
   (let [hash-ring (create-hash-ring (mapv (partial str (ip) "-") (range 1 6)))]
     (println (frequencies hash-ring))
     (println (nodes-for-key hash-ring "foo"))
-    (println (consistent-double-hash "foo") (partition-for-key *partitions* "foo"))
+    (println (consistent-hash "foo") (partition-for-key *partitions* "foo"))
     (println (nodes-for-key (depart-hash-ring hash-ring (str (ip) "-5")) "foo"))
     (println (partitions-for-node hash-ring (str (ip) "-2"))))
 
