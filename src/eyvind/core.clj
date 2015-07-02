@@ -1020,6 +1020,8 @@
 ;; And:
 ;; http://www.cs.cornell.edu/home/rvr/papers/flowgossip.pdf
 ;; https://github.com/dominictarr/scuttlebutt
+;; Also, checkout ringpop which implements both gossip and consistent hashing (without fixed partitions):
+;; https://github.com/uber/ringpop
 
 ;; ZeroMQ
 
