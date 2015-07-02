@@ -1016,6 +1016,7 @@
 ;; Plumtree "Epidemic Broadcast Trees", uses a riak_dt ORSwot to share node membership, but doesn't depend on riak_core:
 ;; https://github.com/helium/plumtree
 ;; http://www.gsd.inesc-id.pt/~jleitao/pdf/srds07-leitao.pdf
+;; (Doesn't seem to be a good fit? Though Riak uses it.)
 
 ;; ZeroMQ
 
