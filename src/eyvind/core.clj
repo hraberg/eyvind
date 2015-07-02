@@ -1017,6 +1017,9 @@
 ;; https://github.com/helium/plumtree
 ;; http://www.gsd.inesc-id.pt/~jleitao/pdf/srds07-leitao.pdf
 ;; (Doesn't seem to be a good fit? Though Riak uses it.)
+;; And:
+;; http://www.cs.cornell.edu/home/rvr/papers/flowgossip.pdf
+;; https://github.com/dominictarr/scuttlebutt
 
 ;; ZeroMQ
 
