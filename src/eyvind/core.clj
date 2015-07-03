@@ -352,6 +352,14 @@
   (crdt-value [this]
     this)
 
+  Double
+  (crdt-least [_]
+    0.0)
+  (crdt-merge [this other]
+    (max (double this) (double other)))
+  (crdt-value [this]
+    this)
+
   Number
   (crdt-least [_]
     0N)
