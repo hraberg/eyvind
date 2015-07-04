@@ -11,6 +11,4 @@
                                   [com.taoensso/nippy "2.9.0"]]}}
   :global-vars {*warn-on-reflection* true
                 *unchecked-math* :warn-on-boxed}
-  :java-source-paths ["src"]
-  :javac-options ["-XDignore.symbol.file"]
   :jvm-opts ^:replace [])
