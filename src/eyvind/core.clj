@@ -6,7 +6,7 @@
             [zeromq.zmq :as zmq])
   (:import
    [eyvind.mmap MappedFile]
-   [clojure.lang IPersistentMap IPersistentSet IPersistentVector]
+   [clojure.lang IDeref IPersistentMap IPersistentSet IPersistentVector IRecord]
    [java.io RandomAccessFile]
    [java.net InetAddress NetworkInterface]
    [java.nio ByteBuffer ByteOrder]
@@ -295,6 +295,7 @@
 ;;       http://www.cs.ucsb.edu/~agrawal/spring2011/ugrad/p233-wuu.pdf
 
 ;; TODO: should this be crdt-empty, crdt-merge and crdt-deref to match Clojure better?
+;;       See https://github.com/funcool/cats where this would be mempty/mzero, mappend/mplus and extract/deref.
 
 ;; TODO: Lasp models dependent operations between CRDTs - like applying map to a set to maintain a dependent one:
 ;;       https://www.info.ucl.ac.be/~pvr/papoc-2015-lasp-abstract.pdf
@@ -304,6 +305,8 @@
   (crdt-least [_])
   (crdt-merge [_ other])
   (crdt-value [_]))
+
+(prefer-method print-method IRecord IDeref)
 
 (defn compare-> [x y]
   (pos? (compare x y)))
@@ -403,6 +406,10 @@
   (crdt-value [this]
     (reduce + (vals this)))
 
+  IDeref
+  (deref [this]
+    (crdt-value this))
+
   Comparable
   (compareTo [this other]
     (compare (crdt-value this) (crdt-value other))))
@@ -434,6 +441,10 @@
     (merge-with crdt-merge this other))
   (crdt-value [this]
     (- (long (crdt-value p)) (long (crdt-value n))))
+
+  IDeref
+  (deref [this]
+    (crdt-value this))
 
   Comparable
   (compareTo [this other]
@@ -497,7 +508,11 @@
          keys
          (into (sorted-set-by
                 (fn [x y]
-                  (compare (adds x) (adds y))))))))
+                  (compare (adds x) (adds y)))))))
+
+  IDeref
+  (deref [this]
+    (crdt-value this)))
 
 (defn lww-set []
   (->LWWSet {} {}))
@@ -547,7 +562,11 @@
                                                                        (lww-map-as-reg-map other)))
                                                (crdt-value new-key-set))))))
   (crdt-value [this]
-    (crdt-value storage)))
+    (crdt-value storage))
+
+  IDeref
+  (deref [this]
+    (crdt-value this)))
 
 (defn lww-map []
   (->LWWMap (lww-set) {}))
@@ -604,7 +623,11 @@
   (crdt-value [this]
     (->> (keys adds)
          (filter (partial or-set-contains? this))
-         set)))
+         set))
+
+  IDeref
+  (deref [this]
+    (crdt-value this)))
 
 (defn or-set []
   (->ORSet {} {}))
@@ -661,7 +684,11 @@
                        [k v])
                      (into {})))))
   (crdt-value [this]
-    (set (keys adds))))
+    (set (keys adds)))
+
+  IDeref
+  (deref [this]
+    (crdt-value this)))
 
 (defn or-swot
   ([]
@@ -706,6 +733,10 @@
     (merge-with crdt-merge this other))
   (crdt-value [this]
     (flag-enabled? this))
+
+  IDeref
+  (deref [this]
+    (crdt-value this))
 
   Comparable
   (compareTo [this other]
@@ -752,6 +783,10 @@
   (crdt-value [this]
     value)
 
+  IDeref
+  (deref [this]
+    (crdt-value this))
+
   Comparable
   (compareTo [this other]
     (compare ts (.ts ^LWWReg other))))
@@ -785,6 +820,10 @@
     (->> (.storage ^LWWMap storage)
          (sort-by key)
          (mapv val)))
+
+  IDeref
+  (deref [this]
+    (crdt-value this))
 
   Object
   (toString [this]
@@ -881,6 +920,10 @@
   (crdt-value [this]
     this)
 
+  IDeref
+  (deref [this]
+    (crdt-value this))
+
   Comparable
   (compareTo [this other]
     (cond
@@ -937,6 +980,10 @@
            l)
          (apply concat)
          vec))
+
+  IDeref
+  (deref [this]
+    (crdt-value this))
 
   Comparable
   (compareTo [this other]
