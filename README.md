@@ -17,9 +17,9 @@ Foundations inspired by Riak Core. Higher level inspired by Dedalus, Linear Meld
 
 ### Dynamo / Riak
 
-http://basho.com/assets/bitcask-intro.pdf
-http://www.slideshare.net/eredmond/distributed-stat-structures
-http://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf
+* http://basho.com/assets/bitcask-intro.pdf
+* http://www.slideshare.net/eredmond/distributed-stat-structures
+* http://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf
 
 ### Constraint Handling Rules
 
