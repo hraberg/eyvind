@@ -5,7 +5,7 @@
 *for a narrative art, far-seeing in lands and ages, in the service of freedom*
 -- Eyvind Johnson, Nobel Prize in Literature 1974 (shared with Harry Martinson)
 
-*I was hacking on this during summer 2015, it doesn't really do anything yet. Has a Bitcask and some CRDT implementations in Clojure that might be of interest. I hope to revisit this in 2016*
+**I was hacking on this during summer 2015, it doesn't really do anything yet. Has a Bitcask and some CRDT implementations in Clojure that might be of interest. I hope to revisit this in 2016**
 
 
 ### Eyvind is (not yet) an experimental distributed rule engine written in Clojure.
