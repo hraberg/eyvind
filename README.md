@@ -37,6 +37,8 @@ Foundations inspired by Riak Core. Higher level inspired by Dedalus, Linear Meld
 
 * http://hal.upmc.fr/inria-00555588/document
 * http://www.infoq.com/articles/Highly-Distributed-Computations-Without-Synchronization
+* http://arxiv.org/pdf/1410.2803.pdf
+* http://christophermeiklejohn.com/publications/ppdp-2015-preprint.pdf
 * http://research.microsoft.com/pubs/240462/ecoop15-extended-tr.pdf
 
 
