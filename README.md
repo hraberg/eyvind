@@ -1,6 +1,6 @@
-[<img width="215" src="https://github.com/hraberg/eyvind/raw/master/strandernas-svall.jpg" alt="Return to Ithaca" title="Return to Ithaca" align="right" />](https://en.wikipedia.org/wiki/Eyvind_Johnson)
-
 # Eyvind
+
+[<img width="215" src="https://github.com/hraberg/eyvind/raw/master/strandernas-svall.jpg" alt="Return to Ithaca" title="Return to Ithaca" align="right" />](https://en.wikipedia.org/wiki/Eyvind_Johnson)
 
 *for a narrative art, far-seeing in lands and ages, in the service of freedom*
 -- Eyvind Johnson, Nobel Prize in Literature 1974 (shared with Harry Martinson)
