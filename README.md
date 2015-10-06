@@ -5,7 +5,10 @@
 *for a narrative art, far-seeing in lands and ages, in the service of freedom*
 -- Eyvind Johnson, Nobel Prize in Literature 1974 (shared with Harry Martinson)
 
-### Eyvind is an experimental distributed rule engine written in Clojure.
+*I was hacking on this during summer 2015, it doesn't really do anything yet. Has a Bitcask and some CRDT implementations in Clojure that might be of interest. I hope to revisit this in 2016*
+
+
+### Eyvind is (not yet) an experimental distributed rule engine written in Clojure.
 
 Foundations inspired by Riak Core. Higher level inspired by Dedalus, Linear Meld, CRDTs and Angelic CHR. Aims to provide Constraint Handling Rules as language, built on a lower-level distributed Datalog and linear logic. Minimal set of dependencies (JeroMQ and tools.logging) to facilitate use as library. Standalone mode with REST (and ZeroMQ) API to be provided as add-on.
 
@@ -34,6 +37,7 @@ http://arxiv.org/pdf/1405.3556v1.pdf
 
 http://hal.upmc.fr/inria-00555588/document
 http://www.infoq.com/articles/Highly-Distributed-Computations-Without-Synchronization
+http://research.microsoft.com/pubs/240462/ecoop15-extended-tr.pdf
 
 
 ## License
