@@ -7,8 +7,8 @@
                  [org.clojure/tools.logging "0.3.1"]
                  [org.zeromq/jeromq "0.3.5"]
                  [org.zeromq/cljzmq "0.1.4" :exclusions [org.zeromq/jzmq]]]
-  :profiles {:dev {:dependencies [[org.clojure/core.async "0.1.346.0-17112a-alpha"]
-                                  [com.taoensso/nippy "2.10.0"]]}}
+  :profiles {:dev {:dependencies [[org.clojure/core.async "0.2.374"]
+                                  [com.taoensso/nippy "2.10.0" :exclusions [org.clojure/tools.reader]]]}}
   :pedantic? :abort
   :global-vars {*warn-on-reflection* true
                 *unchecked-math* :warn-on-boxed}
