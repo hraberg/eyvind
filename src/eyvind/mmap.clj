@@ -30,11 +30,10 @@
     (.close backing-file)
     (unmap this)))
 
-(defn mmap [{:keys [^RandomAccessFile backing-file] :as mapped-file} ^long length]
-  (let [length (round-to-4096 (max length (.length backing-file)))
-        backing-file (doto backing-file
-                       (.setLength length))
-        channel (.getChannel backing-file)]
+(defn mmap [{:keys [backing-file] :as mapped-file} ^long length]
+  (let [length (round-to-4096 (max length (.length ^RandomAccessFile backing-file)))
+        channel (.getChannel (doto ^RandomAccessFile backing-file
+                               (.setLength length)))]
     (assoc mapped-file :address (.invoke mmap-c channel (object-array [(int 1) 0 length])))))
 
 (defn mmap-file
@@ -44,8 +43,8 @@
   ([file ^RandomAccessFile backing-file ^long length]
    (mmap (->MappedFile file -1 backing-file) length)))
 
-(defn unmap [{:keys [address ^RandomAccessFile backing-file] :as mapped-file}]
-  (.invoke unmap-c nil (object-array [address (.length backing-file)]))
+(defn unmap [{:keys [address backing-file] :as mapped-file}]
+  (.invoke unmap-c nil (object-array [address (.length ^RandomAccessFile backing-file)]))
   mapped-file)
 
 (defn remap [{:keys [backing-file] :as mapped-file} ^long new-length]
